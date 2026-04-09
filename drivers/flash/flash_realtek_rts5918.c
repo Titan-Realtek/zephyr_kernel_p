@@ -682,7 +682,7 @@ static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_
 	spic_usermode(dev);
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if (spic_reg == 0x40000000) {
+		if ((uintptr_t)spic_reg == 0x40000000) {
 			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 				spic_automode(dev);
 			}
@@ -701,7 +701,7 @@ static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_
 	ret = flash_wait_till_ready(dev);
 exit:
 	flash_write_disable(dev);
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -722,7 +722,7 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 	spic_usermode(dev);
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if (spic_reg == 0x40000000) {
+		if ((uintptr_t)spic_reg == 0x40000000) {
 			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 				spic_automode(dev);
 			}
@@ -741,7 +741,7 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 	ret = flash_wait_till_ready(dev);
 exit:
 	flash_write_disable(dev);
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -775,7 +775,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	}	
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if (spic_reg == 0x40000000) {
+		if ((uintptr_t)spic_reg == 0x40000000) {
 			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 				spic_automode(dev);
 			}
@@ -797,7 +797,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 
 err_exit:
 	flash_write_disable(dev);
-	if (type == THREEBYTEERASE && (spic_reg == 0x40000000)) {
+	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
 		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
 		ret = spic_write(dev, command, NULL, &len);
 
@@ -808,7 +808,7 @@ err_exit:
 		}				
 	}		
 
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -842,7 +842,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	}	
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if (spic_reg == 0x40000000) {
+		if ((uintptr_t)spic_reg == 0x40000000) {
 			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 				spic_automode(dev);
 			}
@@ -865,7 +865,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	ret = saf_flash_wait_till_ready(dev);
 err_exit:
 	flash_write_disable(dev);
-	if (type == THREEBYTEERASE && (spic_reg == 0x40000000)) {
+	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
 		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
 		ret = spic_write(dev, command, NULL, &len);
 
@@ -876,7 +876,7 @@ err_exit:
 		}				
 	}		
 
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -940,7 +940,7 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 	while (size > 0) {
 		ret = flash_write_enable(dev);
 		if (ret < 0) {
-			if (spic_reg == 0x40000000) {
+			if ((uintptr_t)spic_reg == 0x40000000) {
 				if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 					spic_automode(dev);
 				}
@@ -978,7 +978,7 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 
 err_exit:
 	flash_write_disable(dev);
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -1029,7 +1029,7 @@ static int flash_normal_read(const struct device *dev,
 		}
 
 		if (ret < 0) {
-			if (spic_reg == 0x40000000) {
+			if ((uintptr_t)spic_reg == 0x40000000) {
 				if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 					spic_automode(dev);
 				}
@@ -1039,7 +1039,7 @@ static int flash_normal_read(const struct device *dev,
 			return ret;
 		}
 	}
-	if (spic_reg == 0x40000000) {
+	if ((uintptr_t)spic_reg == 0x40000000) {
 		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 			spic_automode(dev);
 		}
@@ -1367,7 +1367,7 @@ static int flash_rts5918_init(const struct device *dev)
 		// }
 
 		/* SPIC for external flash (BIOS) */
-		if (spic_reg == 0x40000000) {
+		if ((uintptr_t)spic_reg == 0x40000000) {
 			ret = flash_enter_4byte(dev);
 			printk("flash_enter_4byte!\r\n");
 			if (ret != 0) {
