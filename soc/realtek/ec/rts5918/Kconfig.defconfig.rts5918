@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+if SOC_RTS5918
+
+config PINCTRL
+	default y
+
+config CLOCK_CONTROL
+	default y
+
+config GPIO
+	default y
+
+config REALTEK_RTS5918_RTMR
+	default y
+
+if REALTEK_RTS5918_RTMR
+
+config PM
+	default n
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	default 32768
+
+config SYS_CLOCK_TICKS_PER_SEC
+	default 32768
+
+config ARCH_HAS_CUSTOM_BUSY_WAIT
+	default y
+	depends on !COUNTER_REALTEK_RTS5918_SLWTMR
+
+config FLASH
+	default y
+
+config HEAP_MEM_POOL_SIZE
+	default 8192
+	depends on ESPI_RTS5918	
+
+endif # REALTEK_RTS5918_RTMR
+
+endif # SOC_RTS5918

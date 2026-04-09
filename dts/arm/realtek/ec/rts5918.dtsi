@@ -1,0 +1,1128 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+ *
+ */
+
+#include <arm/armv8-m.dtsi>
+#include <zephyr/dt-bindings/adc/adc.h>
+#include <zephyr/dt-bindings/clock/rts5918_clock.h>
+#include <zephyr/dt-bindings/gpio/realtek-gpio.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <mem.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/ {
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			compatible = "arm,cortex-m33f";
+			reg = <0>;
+			cpu-power-states = <&idle &suspend_to_ram>;
+		};
+
+		power-states {
+			idle: idle {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-idle";
+				min-residency-us = <100000000>;
+			};
+
+			suspend_to_ram: suspend_to_ram {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-ram";
+				min-residency-us = <250000000>;
+			};
+		};
+	};
+
+	flash0: flash@2000B400 {
+		reg = <0x2000B400 0x64C00>;
+	};
+
+	sram0: memory@20070000 {
+		compatible = "mmio-sram";
+//		reg = <0x20070000 0x30000>;
+		reg = <0x20070000 0x2FF00>;
+	};
+
+	clocks {
+		rc25m: rc25m {
+			compatible = "fixed-clock";
+			clock-frequency = <25000000>;
+			#clock-cells = <0>;
+		};
+
+		pll: pll {
+			compatible = "fixed-clock";
+			clock-frequency = <100000000>;
+			#clock-cells = <0>;
+		};
+	};
+
+	soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		interrupt-parent = <&nvic>;
+		ranges;
+
+		sccon: clock-controller@40100000 {
+			compatible = "realtek,rts5918-sccon";
+			reg = <0x40100000 0x1000>;
+			#clock-cells = <2>;
+			clocks = <&rc25m>, <&pll>;
+			clock-names = "rc25m", "pll";
+			status = "okay";
+		};
+
+		timer0: timer@40253100 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253100 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <96 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER0_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "okay";
+		};
+		timer1: timer@40253200 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253200 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <97 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER1_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+		timer2: timer@40253300 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253300 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <98 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER2_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+		timer3: timer@40253400 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253400 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <99 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER3_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+		timer4: timer@40253500 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253500 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <100 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER4_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+		timer5: timer@40253600 {
+			compatible = "realtek,rts5918-timer";
+			reg = < 0x40253600 0x10 >;
+			interrupt-parent = <&nvic>;
+			interrupts = <101 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TIMER5_PWR>;
+			clock-names = "tmr32";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <25000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+
+		slwtmr0: slwtmr0@40253700 {
+			compatible = "realtek,rts5918-slwtimer";
+			reg = <0x40253700 0x10>;
+			interrupts = <102 1>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_SLWTMR0_PWR>;
+			clock-names = "slwtmr";
+			max-value = <0xFFFFFFFF>;
+			clock-frequency = <1000000>;
+			prescaler = <0>;
+			status = "disabled";
+		};
+
+		rtmr: rtmr@40253b00 {
+			compatible = "realtek,rts5918-rtmr";
+			reg = <0x40253b00 0x10>;
+			interrupts = <106 0>;
+			status = "okay";
+		};
+
+		adc0: adc@40251900 {
+			compatible = "realtek,rts5918-adc";
+			reg = <0x40251900 0x38>;
+			clocks = <&sccon RTS5918_CLK_LOW RTS5918_ADC_PWR>;
+			clock-names = "adc";
+			interrupts = <125 1>;
+			#io-channel-cells = <1>;
+			status = "disabled";
+		};
+
+		espi0: espi0@40220000 {
+			compatible = "realtek,rts5918-espi";
+			status = "disabled";
+
+			reg = <0x40220000 0x200		/* espi target */
+			       0x40221200 0x01c		/* port80 */
+			       0x40221400 0x1c			/* ACPI */
+			       0x4022141C 0x1C			/* PROMT0 */
+			       0x40221438 0x1C			/* PROMT1 */
+			       0x40221454 0x1C			/* PROMT2 */
+			       0x40221470 0x1C			/* PROMT3 */
+			       0x40221000 0x14			/* EMI0 */
+			       0x40221020 0x14			/* EMI1 */
+			       0x40221040 0x14			/* EMI2 */
+			       0x40221060 0x14			/* EMI3 */
+			       0x40221080 0x14			/* EMI4 */
+			       0x402210A0 0x14			/* EMI5 */
+			       0x402210C0 0x14			/* EMI6 */
+			       0x402210E0 0x14			/* EMI7 */
+			       0x40221700 0x1c			/* KBC */
+			       0x40221600 0xd0>;		/* MBX */
+
+			reg-names = "espi_target", "port80", "acpi", "promt0", "promt1", "promt2",
+				    "promt3", "emi0", "emi1", "emi2", "emi3", "emi4", "emi5",
+				    "emi6", "emi7", "kbc", "mbx";
+
+			clocks = <&sccon RTS5918_CLK_ESPI RTS5918_ESPI_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_DBG80_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_ACPI_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_686C_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_6A6E_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_7478_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_7A7C_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI0_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI1_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI2_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI3_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI4_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI5_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI6_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_EMI7_PWR>,
+				 <&sccon RTS5918_CLK_ESPI RTS5918_KBC_PWR>;
+
+			clock-names = "espi-target", "port80", "acpi", "promt0", "promt1", "promt2",
+				      "promt3", "emi0", "emi1", "emi2", "emi3", "emi4", "emi5",
+				      "emi6", "emi7", "kbc";
+
+			interrupts = <22 1>, <23 1>, <35 1>,
+				     <34 1>, <33 1>, <32 1>,
+				     <31 1>, <30 1>, <29 1>,
+				     <28 1>, <27 1>, <26 1>,
+				     <25 1>, <24 1>, <44 1>,
+				     <45 1>, <46 1>, <47 1>,
+				     <48 1>, <49 1>, <50 1>,
+				     <51 1>, <52 1>, <53 1>,
+				     <54 1>, <55 1>, <116 1>,
+				     <117 1>, <118 1>, <119 1>,
+				     <120 1>, <121 1>, <122 1>,
+				     <123 1>, <36 1>, <37 1>,
+				     <38 1>, <41 1>, <42 1>,
+				     <56 1>, <124 1>;
+
+			interrupt-names = "bus-rst", "periph-ch", "vw-ch",
+					  "vw-idx2", "vw-idx3", "vw-idx7",
+					  "vw-idx41", "vw-idx42", "vw-idx43",
+					  "vw-idx44", "vw-idx47", "vw-idx4a",
+					  "vw-idx51", "vw-idx61", "kbc_ibf",
+					  "kbc_obe", "acpi_ibf", "acpi_obe",
+					  "promt0_ibf", "promt0_obe", "promt1_ibf",
+					  "promt1_obe", "promt2_ibf", "promt2_obe",
+					  "promt3_ibf", "promt3_obe", "emi0",
+					  "emi1", "emi2", "emi3",
+					  "emi4", "emi5", "emi6",
+					  "emi7", "oob_tx", "oob_rx",
+					  "oob_chg", "maf_tr", "flash_chg",
+					  "port80", "mbx";
+		};
+
+		uart0: uart@40251600 {
+			compatible = "ns16550";
+			reg = <0x40251600 0x100>;
+			reg-shift = <2>;
+			clock-frequency = <25000000>;
+			interrupts = <79 1>;
+			status = "disabled";
+		};
+
+		uart1: uart@40251700 {
+			compatible = "ns16550";
+			reg = <0x40251700 0x100>;
+			reg-shift = <2>;
+			clock-frequency = <25000000>;
+			interrupts = <80 1>;
+			status = "disabled";
+		};
+
+		uart2: uart@40251800 {
+			compatible = "ns16550";
+			reg = <0x40251800 0x100>;
+			reg-shift = <2>;
+			clock-frequency = <25000000>;
+			interrupts = <81 1>;
+			status = "disabled";
+		};
+
+		uart0_wrapper: uart_wrapper@40251600 {
+			compatible = "realtek,rts5918-uart";
+			reg = <0x40251600 0x0004>;
+			port = <0>;
+			clocks = <&sccon RTS5918_CLK_LOW RTS5918_UART0_PWR>;
+			clock-names = "uart0";
+			status = "disabled";
+		};
+
+		uart1_wrapper: uart_wrapper@40251700 {
+			compatible = "realtek,rts5918-uart";
+			reg = <0x40251700 0x0004>;
+			port = <0>;
+			clocks = <&sccon RTS5918_CLK_LOW RTS5918_UART1_PWR>;
+			clock-names = "uart1";
+			status = "disabled";
+		};
+
+		uart2_wrapper: uart_wrapper@40251800 {
+			compatible = "realtek,rts5918-uart";
+			reg = <0x40251800 0x0004>;
+			port = <0>;
+			clocks = <&sccon RTS5918_CLK_LOW RTS5918_UART2_PWR>;
+			clock-names = "uart2";
+			status = "disabled";
+		};
+
+		flash_controller: flash-controller@40000000 {
+			compatible = "realtek,rts5918-flash-controller";
+			reg = <0x40000000 0x200>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			status = "okay";
+
+			eflash: eflash@60000000 {
+				compatible = "soc-nv-flash";
+				reg = <0x60000000 DT_SIZE_K(1024)>;
+				erase-block-size = <DT_SIZE_K(4)>;
+				write-block-size = <4>;
+			};
+		};
+
+		flash_controller1: flashcontroller1@40001000 {
+			compatible = "realtek,rts5918-flash-controller";
+			reg = <0x40001000 0x200>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			status = "okay";
+
+			eflash1: eflash1@80000000 {
+				compatible = "soc-nv-flash";
+				reg = <0x80000000 DT_SIZE_K(1024)>;
+				erase-block-size = <DT_SIZE_K(4)>;
+				write-block-size = <4>;
+			};
+		};
+
+
+		i2c_1: i2c@40250000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250000 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <65 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_2: i2c@40250200 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250200 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <66 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_3: i2c@40250400 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250400 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <67 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_4: i2c@40250600 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250600 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <68 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_5: i2c@40250800 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250800 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <69 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_6: i2c@40250a00 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250a00 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <70 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_7: i2c@40250c00 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250c00 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <71 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_8: i2c@40250e00 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40250e00 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <72 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_9: i2c@40251000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40251000 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <73 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_10: i2c@40251200 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40251200 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <74 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2c_11: i2c@40251400 {
+			compatible = "snps,designware-i2c";
+			reg = <0x40251400 0x154>;
+			clock-frequency = <I2C_BITRATE_STANDARD>;
+			interrupt-parent = <&nvic>;
+			interrupts = <75 2>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		/*
+		 * Phase 10.9 — RTS5918 has 3 PS/2 controllers (datasheet
+		 * §36.2.51 + RL7088_SVD-master 3/RTS5918.h PS2_n_BASE):
+		 *   PS2_1 @ 0x40254300  IRQ 76
+		 *   PS2_2 @ 0x40254400  IRQ 77  (was the only one declared)
+		 *   PS2_3 @ 0x40255700  IRQ 78
+		 *
+		 * NOTE: ps2_realtek_rts5918.c has multiple hardcoded
+		 * `DT_INST_IRQN(0)` / `DT_DRV_INST(0)` references in the
+		 * REALTEK_PS2_DEVICE() macro (lines 348, 366-368) — the
+		 * driver is effectively single-instance only. Keep at most
+		 * ONE ps2_N node status="okay" per board until that is
+		 * fixed in the driver.
+		 *
+		 * Also normalized ps2_2 from status="okay" → "disabled" to
+		 * match the rest of the rts5918.dtsi convention. Bison's
+		 * trackpoint routes via ps2_1 + GPIO067/068 (Phase 10.9),
+		 * not ps2_2 anymore.
+		 */
+		ps2_1: ps2@40254300 {
+			compatible = "realtek,rts5918-ps2";
+			reg = <0x40254300 0x14>;
+			interrupts = <76 1>;
+			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_1_PWR>,
+						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_1_PWR>;
+			clock-names = "ps2","ps2_32k";
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		ps2_2: ps2@40254400 {
+			compatible = "realtek,rts5918-ps2";
+			reg = <0x40254400 0x14>;
+			interrupts = <77 1>;
+			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_2_PWR>,
+						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_2_PWR>;
+			clock-names = "ps2","ps2_32k";
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		ps2_3: ps2@40255700 {
+			compatible = "realtek,rts5918-ps2";
+			reg = <0x40255700 0x14>;
+			interrupts = <78 1>;
+			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_3_PWR>,
+						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_3_PWR>;
+			clock-names = "ps2","ps2_32k";
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		pwm1: pwm@40254500 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM1_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254500 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm2: pwm@40254600 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM2_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254600 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm7: pwm@40254b00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM7_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254b00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm13: pwm@40255100 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM13_PWR>;
+			clock-names = "pwm";
+			reg = <0x40255100 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm3: pwm@40254700 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM3_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254700 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		/*
+		 * Phase 10.6 — additional PWM controllers from RTS5918 datasheet
+		 * (RL7088_SVD-master 3/RTS5918.h PWMn_BASE definitions). Each
+		 * controller is 0x100 apart starting at 0x40254500. Clock bindings
+		 * RTS5918_PWM4..11_PWR / RTS5918_PWM12_PWR exist in
+		 * include/zephyr/dt-bindings/clock/rts5918_clock.h. All disabled
+		 * by default; board files enable + add pinctrl as needed.
+		 */
+		pwm4: pwm@40254800 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM4_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254800 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm5: pwm@40254900 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM5_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254900 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm6: pwm@40254a00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM6_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254a00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm8: pwm@40254c00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM8_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254c00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm9: pwm@40254d00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM9_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254d00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm10: pwm@40254e00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM10_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254e00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm11: pwm@40254f00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM11_PWR>;
+			clock-names = "pwm";
+			reg = <0x40254f00 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwm12: pwm@40255000 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_PWM12_PWR>;
+			clock-names = "pwm";
+			reg = <0x40255000 0x0c>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		pwmled1: pwm@40252D00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED1_PWR>;
+			clock-names = "pwm";
+			reg = <0x40252D00 0x18>;
+			status = "disabled";
+			#pwm-cells = <3>;
+		};
+
+		/*
+		 * Phase 10.6 — RTS5918 has 9 tachometer controllers per the
+		 * datasheet (RL7088_SVD-master 3/RTS5918.h TACHOn_BASE +
+		 * TACHOn_IRQn definitions). Each controller is 0x100 apart
+		 * starting at 0x40251F00. IRQs are 82..90 sequentially. Clock
+		 * bindings RTS5918_TACH1..9_PWR exist in the SCCON header.
+		 *
+		 * Pinctrl-0 used to be hardcoded on tach5 to gpio013 (an
+		 * arbitrary choice that wasn't right for any board). Removed
+		 * — pinctrl is a board-level concern. Boards that use a tach
+		 * controller add it via `&tachN { pinctrl-0 = <...>; };`.
+		 */
+		tach1: tach@40251f00 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40251f00 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH1_PWR>;
+			clock-names = "tacho";
+			interrupts = <82 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach2: tach@40252000 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252000 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH2_PWR>;
+			clock-names = "tacho";
+			interrupts = <83 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach3: tach@40252100 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252100 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH3_PWR>;
+			clock-names = "tacho";
+			interrupts = <84 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach4: tach@40252200 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252200 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH4_PWR>;
+			clock-names = "tacho";
+			interrupts = <85 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach5: tach@40252300 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252300 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH5_PWR>;
+			clock-names = "tacho";
+			interrupts = <86 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach6: tach@40252400 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252400 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH6_PWR>;
+			clock-names = "tacho";
+			interrupts = <87 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach7: tach@40252500 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252500 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH7_PWR>;
+			clock-names = "tacho";
+			interrupts = <88 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach8: tach@40252600 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252600 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH8_PWR>;
+			clock-names = "tacho";
+			interrupts = <89 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		tach9: tach@40252700 {
+			compatible = "realtek,rts5918-tach";
+			reg = <0x40252700 0x40>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_TACH9_PWR>;
+			clock-names = "tacho";
+			interrupts = <90 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		rtc: rtc@40253c00 {
+			compatible = "realtek,rts5918-rtc";
+			reg = <0x40253c00 0x20>;
+			clocks = <&sccon RTS5918_CLK_APB RTS5918_RTC_PWR>;
+			clock-names = "rtc";
+			interrupt-parent = <&nvic>;
+			interrupts = <107 2>;
+			status = "disabled";
+		};
+
+		wdog: watchdog@40253f00 {
+			compatible = "realtek,rts5918-watchdog";
+			reg = <0x40253f00 0x014>;
+			interrupt-parent = <&nvic>;
+			interrupts = <114 1>;
+			clocks = <&sccon RTS5918_CLK_APB RTS5918_WDT_PWR>;
+			clock-names = "watchdog";
+			clk-divider = <33>;
+			status = "disabled";
+		};
+
+		kbd: kbd@40254200 {
+			compatible = "realtek,rts5918-kbd";
+			reg = <0x40254200 0x30>;
+			clocks = <&sccon RTS5918_CLK_RC25M RTS5918_KBM_PWR >;
+			interrupts = <115 1>;
+			interrupt-parent = <&nvic>;
+			status = "disabled";
+		};
+
+		pinctrl: pin-controller@40230000 {
+			compatible = "realtek,rts5918-pinctrl";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x40230000 0x300>;
+
+			/* GPIO0-GPIO7 */
+			gpioa: gpio@40230000 {
+				index = <0>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230000 0x20>;
+				ngpios = <8>;
+				interrupts = <0 1>;
+			};
+
+			/* GPIO8-GPIO15 */
+			gpiob: gpio@40230020 {
+				index = <1>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230020 0x20>;
+				ngpios = <8>;
+				interrupts = <1 1>;
+			};
+
+			/* GPIO16-GPIO23 */
+			gpioc: gpio@40230040 {
+				index = <2>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230040 0x20>;
+				ngpios = <8>;
+				interrupts = <2 1>;
+			};
+
+			/* GPIO24-GPIO31 */
+			gpiod: gpio@40230060 {
+				index = <3>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230060 0x20>;
+				ngpios = <8>;
+				interrupts = <3 1>;
+			};
+
+			/* GPIO32-GPIO39 */
+			gpioe: gpio@40230080 {
+				index = <4>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230080 0x20>;
+				ngpios = <8>;
+				interrupts = <4 1>;
+			};
+
+			/* GPIO40-GPIO47 */
+			gpiof: gpio@402300A0 {
+				index = <5>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402300A0 0x20>;
+				ngpios = <8>;
+				interrupts = <5 1>;
+			};
+
+			/* GPIO48-GPIO55 */
+			gpiog: gpio@402300C0 {
+				index = <6>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402300C0 0x20>;
+				ngpios = <8>;
+				interrupts = <6 1>;
+			};
+
+			/* GPIO56-GPIO63 */
+			gpioh: gpio@402300E0 {
+				index = <7>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402300E0 0x20>;
+				ngpios = <8>;
+				interrupts = <7 1>;
+			};
+
+			/* GPIO64-GPIO71 */
+			gpioi: gpio@40230100 {
+				index = <8>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230100 0x20>;
+				ngpios = <8>;
+				interrupts = <8 1>;
+			};
+
+			/* GPIO72-GPIO79 */
+			gpioj: gpio@40230120 {
+				index = <9>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230120 0x20>;
+				ngpios = <8>;
+				interrupts = <9 1>;
+			};
+
+			/* GPIO80-GPIO87 */
+			gpiok: gpio@40230140 {
+				index = <10>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230140 0x20>;
+				ngpios = <8>;
+				interrupts = <10 1>;
+			};
+
+			/* GPIO88-GPIO95 */
+			gpiol: gpio@40230160 {
+				index = <11>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230160 0x20>;
+				ngpios = <8>;
+				interrupts = <11 1>;
+			};
+
+			/* GPIO96-GPIO103 */
+			gpiom: gpio@40230180 {
+				index = <12>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230180 0x20>;
+				ngpios = <8>;
+				interrupts = <12 1>;
+			};
+
+			/* GPIO104-GPIO111 */
+			gpion: gpio@402301A0 {
+				index = <13>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402301A0 0x20>;
+				ngpios = <8>;
+				interrupts = <13 1>;
+			};
+
+			/* GPIO112-GPIO119 */
+			gpioo: gpio@402301C0 {
+				index = <14>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402301C0 0x20>;
+				ngpios = <8>;
+				interrupts = <14 1>;
+			};
+
+			/* GPIO120-GPIO127 */
+			gpiop: gpio@402301E0 {
+				index = <15>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x402301E0 0x20>;
+				ngpios = <8>;
+				interrupts = <15 1>;
+			};
+
+			/* GPIO128-GPIO135 */
+			gpioq: gpio@40230200 {
+				index = <16>;
+				compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230200 0x20>;
+				ngpios = <8>;
+				interrupts = <16 1>;
+			};
+
+			/* GPIO136-GPIO143 */
+			gpior: gpio@40230220 {
+				index = <17>;
+			compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230220 0x20>;
+				ngpios = <8>;
+				interrupts = <17 1>;
+			};
+
+			/* GPIO144-GPIO151 */
+			gpios: gpio@40230240 {
+				index = <18>;
+			compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230240 0x20>;
+				ngpios = <8>;
+				interrupts = <18 1>;
+			};
+
+			/* GPIO152-GPIO159 */
+			gpiot: gpio@40230260 {
+				index = <19>;
+			compatible = "realtek,rts5918-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x40230260 0x20>;
+				ngpios = <8>;
+				interrupts = <19 1>;
+			};
+		};
+	};
+
+	swj_port:swj_port{
+		compatible = "swj-connector";
+		pinctrl-0 = < &jtag_tdi_gpio105
+					  &jtag_tdo_gpio104
+					  &jtag_rst_gpio58
+					  &jtag_clk_gpio107
+					  &jtag_tms_gpio106 >;
+		pinctrl-names = "default";
+		status = "disabled";
+	};
+
+	i2c_1_wrapper: i2c_1_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev phandle removed — would create
+		 * a DT dependency on the dw i2c node and force this wrapper
+		 * to init AFTER it (POST_KERNEL+38 > +29), but the wrapper
+		 * MUST run BEFORE i2c_dw_initialize so the SCCON clock is
+		 * on when dw reads the magic key. The wrapper init only
+		 * needs the clocks cell below; it doesn't touch the dw
+		 * device. See drivers/i2c/i2c_realtek_rts5918.c Phase 10.10
+		 * shim comment for the full rationale.
+		 */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C1_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_2_wrapper: i2c_2_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C2_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_3_wrapper: i2c_3_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C3_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_4_wrapper: i2c_4_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C4_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_5_wrapper: i2c_5_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C5_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_6_wrapper: i2c_6_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C6_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_7_wrapper: i2c_7_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C7_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_8_wrapper: i2c_8_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C8_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_9_wrapper: i2c_9_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C9_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_10_wrapper: i2c_10_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C10_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+
+	i2c_11_wrapper: i2c_11_wrapper {
+		compatible = "realtek,rts5918-i2c";
+		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C11_PWR>;
+		clock-names = "i2c";
+		status = "disabled";
+	};
+};
+
+&nvic {
+	arm,num-irq-priority-bits = <3>;
+};
+
+&systick {
+	status = "disabled";
+};
