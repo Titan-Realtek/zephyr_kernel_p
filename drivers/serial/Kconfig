@@ -280,4 +280,8 @@ rsource "Kconfig.rzt2m"
 
 source "drivers/serial/Kconfig.renesas_ra8"
 
+
+
+source "drivers/serial/Kconfig.realtek_rts5918"
+
 endif # SERIAL

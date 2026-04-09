@@ -1,0 +1,33 @@
+# Copyright (c) 2025 Realtek, SIBG-SD7
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig I2C_RTS5918
+	bool "Realtek RTS5918 I2C support"
+	default y
+	depends on DT_HAS_REALTEK_RTS5918_I2C_ENABLED
+	select I2C_ALLOW_NO_STOP_TRANSACTIONS
+	help
+	  Enable the Realtek RTS5918 I2C driver
+
+config I2C_RTS5918_INIT_PRIORITY
+	int "RTS5918 Init priority"
+	depends on I2C_RTS5918
+	default 45
+	help
+	  I2C device driver initialization priority.
+
+	  Phase 10.10: must be LESS than CONFIG_I2C_INIT_PRIORITY (default
+	  50, the DesignWare driver). The RTS5918 wrapper enables the
+	  SCCON IPCLK1__I2Cn clock bit; the DW driver then reads the
+	  controller magic key at i2c_dw.c:1101 to verify register access.
+	  If the wrapper runs after dw_init, dw reads garbage from the
+	  power-gated controller and aborts with -EIO, leaving every i2c
+	  transaction broken at runtime.
+
+config I2C_ALLOW_NO_STOP_TRANSACTIONS
+	bool "Allows I2C transfers with no STOP on the last transaction [DEPRECATED]"
+	default y
+	help
+	  Allow I2C transactions with no STOP on the last message. This is
+	  unsupported and can leave the bus in an unexpected state. The option
+	  will be removed in Zephyr 4.1.

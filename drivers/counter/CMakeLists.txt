@@ -50,3 +50,5 @@ zephyr_library_sources_ifdef(CONFIG_COUNTER_SNPS_DW             counter_dw_timer
 zephyr_library_sources_ifdef(CONFIG_COUNTER_SHELL               counter_timer_shell.c)
 zephyr_library_sources_ifdef(CONFIG_COUNTER_TIMER_RPI_PICO      counter_rpi_pico_timer.c)
 zephyr_library_sources_ifdef(CONFIG_COUNTER_NXP_MRT             counter_nxp_mrt.c)
+zephyr_library_sources_ifdef(CONFIG_COUNTER_REALTEK_RTS5918 counter_realtek_rts5918.c)
+zephyr_library_sources_ifdef(CONFIG_COUNTER_REALTEK_RTS5918_SLWTMR counter_realtek_rts5918_slwtmr.c)

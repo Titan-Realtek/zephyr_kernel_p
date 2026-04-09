@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+description: Realtek RTS5918 GPIO
+
+compatible: "realtek,rts5918-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+  index:
+    type: int
+    description: |
+      Logical index of this GPIO bank, used by the ecfw-zephyr middle
+      layer (mdl_gpio_hub) to pack (port, pin) into a single uint32_t
+      via DT_PROP(ctlr, index).
+
+gpio-cells:
+  - pin
+  - flags

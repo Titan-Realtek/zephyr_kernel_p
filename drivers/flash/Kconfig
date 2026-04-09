@@ -125,6 +125,7 @@ config FLASH_SHELL_BUFFER_SIZE
 	  Size of the buffer used for flash commands, will determine the
 	  maximum size that can be used with a read/write test.
 
+
 endif # FLASH_SHELL
 
 config FLASH_FILL_BUFFER_SIZE
@@ -237,5 +238,8 @@ source "drivers/flash/Kconfig.nrf_rram"
 source "drivers/flash/Kconfig.nrf_mram"
 
 source "drivers/flash/Kconfig.numaker_rmc"
+
+
+source "drivers/flash/Kconfig.rts5918"
 
 endif # FLASH

@@ -11,3 +11,8 @@ properties:
   ngpios:
     required: true
     const: 16
+  index:
+    type: int
+    description: |
+      Logical bank index used by ecfw-zephyr middle layer
+      (mdl_gpio_hub) to pack (port, pin) into uint32_t. Optional.

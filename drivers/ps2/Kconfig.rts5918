@@ -1,0 +1,18 @@
+# RTS5918 PS2 configuration options
+
+# Copyright (c) 2025 Realtek Semiconductor Corporation, SIBG-SD7
+# SPDX-License-Identifier: Apache-2.0
+
+config PS2_REALTEK_RTS5918
+	bool "Realtek RTS5918 embedded controller (EC) PS2 driver"
+	depends on DT_HAS_REALTEK_RTS5918_PS2_ENABLED
+	default y
+	help
+	  Enable the RTS5918 PS2 driver. The RTS5918 has a single PS/2
+	  controller (ps2_2 @ 0x40254400) that provides one quasi-bidirectional
+	  PS/2 channel suitable for an internal pointing device (TrackPoint).
+
+	  The driver implements the standard Zephyr ps2_* API (config / write
+	  / enable_callback / disable_callback). RX is callback-driven from
+	  the controller IRQ; TX is blocking on a tx_sync_sem until the
+	  Transaction Done Status interrupt fires.
