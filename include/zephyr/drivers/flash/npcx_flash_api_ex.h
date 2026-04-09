@@ -37,6 +37,15 @@ enum flash_npcx_ex_ops {
 	 * It returns current specific operation for Quad-SPI nor flash.
 	 */
 	FLASH_NPCX_EX_OP_GET_QSPI_OPER,
+	/*
+	 * Lenovo ECFW (rts5918_bison stub) extra UMA opcodes used by
+	 * Jupiter/smc/HwFlashInterface.c. Patched in here so the
+	 * customer source compiles. Real implementations are added in
+	 * later phases when HwFlashInterface.c is rewritten for RTS5918.
+	 */
+	FLASH_NPCX_EX_OP_EXEC_UMA_ERASE,
+	FLASH_NPCX_EX_OP_EXEC_UMA_WRITE,
+	FLASH_NPCX_EX_OP_EXEC_UMA_WRITE_STATUS,
 };
 
 /* Structures used by FLASH_NPCX_EX_OP_EXEC_UMA */
