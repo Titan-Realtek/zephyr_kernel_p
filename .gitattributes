@@ -15,7 +15,6 @@
 # RTS5918 port: force LF on all Realtek-added/modified files so Windows
 # editors (VS Code, Notepad) cannot silently re-introduce CRLF and blow up
 # the generated zephyr_patch with phantom whole-file rewrites.
-boards/realtek/rts5918_bison/**	text eol=lf
 soc/realtek/ec/rts5918/**	text eol=lf
 dts/arm/realtek/**	text eol=lf
 dts/bindings/**/realtek,rts5918-*.yaml	text eol=lf
