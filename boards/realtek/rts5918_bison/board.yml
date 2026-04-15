@@ -1,5 +1,0 @@
-board:
-  name: rts5918_bison
-  vendor: realtek
-  socs:
-  - name: rts5918
