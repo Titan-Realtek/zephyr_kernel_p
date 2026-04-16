@@ -37,6 +37,7 @@
 
 static struct k_spinlock lock;
 static uint32_t accumulated_cycles;
+static uint64_t accumulated_cycles_64; /* Unmasked lifetime cycle count for k_cycle_get_64 */
 static uint32_t previous_cnt;      // Record the counter set into RTMR
 static uint32_t last_announcement; // Record the last tick announced to system
 
@@ -76,6 +77,7 @@ void rtmr_isr(const void *arg)
 
 	accumulated_cycles += cycles;
 	accumulated_cycles &= RTMR_COUNTER_MSK;
+	accumulated_cycles_64 += cycles;
 
 	ticks = (accumulated_cycles - last_announcement) & RTMR_COUNTER_MSK;
 	ticks /= CYCLES_PER_TICK;
@@ -92,6 +94,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	ARG_UNUSED(idle);
 
 	uint32_t cur_cnt, temp;
+	uint32_t delta;
 	int full_ticks;
 	uint32_t full_cycles;
 	uint32_t partial_cycles;
@@ -118,10 +121,12 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 
 	RTMR_REG->CTRL = 0U;
 
+	delta = previous_cnt - cur_cnt;
 	temp = accumulated_cycles;
-	temp += (previous_cnt - cur_cnt);
+	temp += delta;
 	temp &= RTMR_COUNTER_MSK;
 	accumulated_cycles = temp;
+	accumulated_cycles_64 += delta;
 
 	partial_cycles = CYCLES_PER_TICK - (accumulated_cycles % CYCLES_PER_TICK);
 	previous_cnt = full_cycles + partial_cycles;
@@ -184,6 +189,21 @@ uint32_t sys_clock_cycle_get_32(void)
 	return ret;
 }
 
+uint64_t sys_clock_cycle_get_64(void)
+{
+	uint64_t ret;
+	uint32_t cur_cnt;
+
+	k_spinlock_key_t key = k_spin_lock(&lock);
+
+	cur_cnt = rtmr_get_counter();
+	ret = accumulated_cycles_64 + (previous_cnt - cur_cnt);
+
+	k_spin_unlock(&lock, key);
+
+	return ret;
+}
+
 #ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT
 
 void arch_busy_wait(uint32_t n_usec)
@@ -207,6 +227,7 @@ void arch_busy_wait(uint32_t n_usec)
 static int sys_clock_driver_init(void)
 {
 	accumulated_cycles = 0;
+	accumulated_cycles_64 = 0;
 	previous_cnt = 0;
 	last_announcement = 0;
 	/* Enable RTMR clock power */
