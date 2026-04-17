@@ -36,6 +36,14 @@ LOG_MODULE_REGISTER(flash_rts5918);
 #define FLASH_CMD_EXTNADDR_WREAR 0xC5 /* Write extended address register */
 #define FLASH_CMD_EXTNADDR_RDEAR 0xC8 /* Read extended address register */
 
+/* W25Q-style Security Register vendor commands */
+#define FLASH_CMD_RDSECREG       0x48 /* Read Security Registers  (24-bit addr + 8 dummy) */
+#define FLASH_CMD_PPSECREG       0x42 /* Program Security Registers (24-bit addr, up to 256B) */
+#define FLASH_CMD_ERSECREG       0x44 /* Erase Security Registers (24-bit addr, erases a 256B page) */
+
+#define SEC_REG_PAGE_BYTES       256
+#define SEC_REG_READ_DUMMY       8
+
 #define MODE(x)    (((x) << 6) & SPIC_CTRL0_SCPH)
 #define TMOD(x)    (((x) << SPIC_CTRL0_TMOD_Pos) & SPIC_CTRL0_TMOD_Msk)
 #define CMD_CH(x)  (((x) << SPIC_CTRL0_CMDCH_Pos) & SPIC_CTRL0_CMDCH_Msk)
@@ -164,6 +172,9 @@ static int config_command(struct qspi_cmd *command, uint8_t cmd, uint32_t addr,
 case SPI_NOR_CMD_SE_4B:
 	case FLASH_CMD_RDSFDP:
 	case SPI_NOR_CMD_PP:
+	case FLASH_CMD_RDSECREG:
+	case FLASH_CMD_PPSECREG:
+	case FLASH_CMD_ERSECREG:
 		command->address.disabled = 0;
 		command->address.bus_width = SPIC_CFG_BUS_SINGLE;
 		command->data.bus_width = SPIC_CFG_BUS_SINGLE;
@@ -894,6 +905,115 @@ err_exit:
 	return ret;
 }
 
+/*
+ * W25Q Security Register helpers.
+ *
+ * Addresses are 24-bit on Winbond regardless of whether the main array
+ * is in 3-byte or 4-byte mode, so these always use SPIC_CFG_ADDR_SIZE_24.
+ * Read uses cmd 0x48 with 8 dummy cycles; program/erase are WREN-gated
+ * and poll WIP after the op.
+ *
+ * Restoring auto-mode at the end mirrors flash_erase_sector /
+ * flash_program_page: SPIC0 only re-enters auto-mode when the platform
+ * register at 0x402301e4 bit 8 is still asserted (matches the "external
+ * flash ready for memory-mapped access" latch checked elsewhere).
+ */
+
+static inline void spic_restore_automode(const struct device *dev)
+{
+	const struct flash_rts5918_dev_config *config = dev->config;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
+
+	if ((uintptr_t)spic_reg == 0x40000000) {
+		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+			spic_automode(dev);
+		}
+	} else {
+		spic_automode(dev);
+	}
+}
+
+static int flash_read_sec_reg(const struct device *dev, uint32_t address,
+			      void *data, uint32_t length)
+{
+	struct flash_rts5918_dev_data *dev_data = dev->data;
+	struct qspi_cmd *command = &dev_data->command_default;
+	int ret;
+	uint32_t len = length;
+
+	if (data == NULL || length == 0 || length > SEC_REG_PAGE_BYTES) {
+		return -EINVAL;
+	}
+
+	spic_usermode(dev);
+	config_command(command, FLASH_CMD_RDSECREG, address,
+		       SPIC_CFG_ADDR_SIZE_24, SEC_REG_READ_DUMMY);
+	ret = spic_read(dev, command, data, (size_t *)&len);
+	spic_restore_automode(dev);
+	return ret;
+}
+
+static int flash_program_sec_reg(const struct device *dev, uint32_t address,
+				 const void *data, uint32_t length)
+{
+	struct flash_rts5918_dev_data *dev_data = dev->data;
+	struct qspi_cmd *command = &dev_data->command_default;
+	int ret;
+	uint32_t len = length;
+
+	if (data == NULL || length == 0 || length > SEC_REG_PAGE_BYTES) {
+		return -EINVAL;
+	}
+
+	spic_usermode(dev);
+	ret = flash_write_enable(dev);
+	if (ret < 0) {
+		goto out;
+	}
+
+	config_command(command, FLASH_CMD_PPSECREG, address,
+		       SPIC_CFG_ADDR_SIZE_24, 0);
+	ret = spic_write(dev, command, data, &len);
+	if (ret < 0) {
+		goto out_disable;
+	}
+	ret = flash_wait_till_ready(dev);
+
+out_disable:
+	flash_write_disable(dev);
+out:
+	spic_restore_automode(dev);
+	return ret;
+}
+
+static int flash_erase_sec_reg(const struct device *dev, uint32_t address)
+{
+	struct flash_rts5918_dev_data *dev_data = dev->data;
+	struct qspi_cmd *command = &dev_data->command_default;
+	int ret;
+	uint32_t len = 0;
+
+	spic_usermode(dev);
+	ret = flash_write_enable(dev);
+	if (ret < 0) {
+		goto out;
+	}
+
+	config_command(command, FLASH_CMD_ERSECREG, address,
+		       SPIC_CFG_ADDR_SIZE_24, 0);
+	ret = spic_write(dev, command, NULL, &len);
+	if (ret < 0) {
+		goto out_disable;
+	}
+	ret = flash_wait_till_ready(dev);
+
+out_disable:
+	flash_write_disable(dev);
+out:
+	spic_restore_automode(dev);
+	return ret;
+}
+
 struct qspi_cmd_set {
 	uint8_t read;
 	uint8_t program;
@@ -1245,6 +1365,40 @@ static int flash_rts5918_ex_op(const struct device *dev, uint16_t opcode, const 
 		}
 		dev_data->cs = cs;
 		ret = 0;
+		break;
+	}
+	case FLASH_RTS5918_EX_OP_SEC_REG_READ: {
+		const struct flash_rts5918_sec_reg_op *op =
+			(const struct flash_rts5918_sec_reg_op *)in;
+
+		if (op == NULL) {
+			ret = -EINVAL;
+			break;
+		}
+		ret = flash_read_sec_reg(dev, op->address, op->buf, op->length);
+		break;
+	}
+	case FLASH_RTS5918_EX_OP_SEC_REG_WRITE: {
+		const struct flash_rts5918_sec_reg_op *op =
+			(const struct flash_rts5918_sec_reg_op *)in;
+
+		if (op == NULL) {
+			ret = -EINVAL;
+			break;
+		}
+		ret = flash_program_sec_reg(dev, op->address, op->buf,
+					    op->length);
+		break;
+	}
+	case FLASH_RTS5918_EX_OP_SEC_REG_ERASE: {
+		const struct flash_rts5918_sec_reg_op *op =
+			(const struct flash_rts5918_sec_reg_op *)in;
+
+		if (op == NULL) {
+			ret = -EINVAL;
+			break;
+		}
+		ret = flash_erase_sec_reg(dev, op->address);
 		break;
 	}
 	}
