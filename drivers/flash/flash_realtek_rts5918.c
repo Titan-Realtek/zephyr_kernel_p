@@ -119,6 +119,12 @@ struct flash_rts5918_dev_config {
 struct flash_rts5918_dev_data {
 	struct k_sem sem;
 	struct qspi_cmd command_default;
+	/*
+	 * Chip-select index driven onto SER by spic_cs_active(). Default
+	 * 0 matches single-chip Nuvoton-era topology; Bison uses CS1 on
+	 * SPIC0 via FLASH_RTS5918_EX_OP_SELECT_CS before each op.
+	 */
+	uint8_t cs;
 };
 
 static const uint8_t user_addr_len[] = {
@@ -223,8 +229,9 @@ static inline void spic_cs_active(const struct device *dev)
 {
 	const struct flash_rts5918_dev_config *config = dev->config;
 	volatile struct reg_spic_reg *spic_reg = config->regs;
+	struct flash_rts5918_dev_data *data = dev->data;
 
-	spic_reg->SER = 1UL;
+	spic_reg->SER = BIT(data->cs);
 }
 
 static inline void spic_cs_deactivate(const struct device *dev)
@@ -1222,6 +1229,24 @@ static int flash_rts5918_ex_op(const struct device *dev, uint16_t opcode, const 
 	case FLASH_RTS5918_EX_OP_GET_WP:
 		ret = flash_get_wp(dev, (uint8_t *)in);
 		break;
+	case FLASH_RTS5918_EX_OP_4BYTE_MODE:
+		ret = flash_enter_4byte(dev);
+		break;
+	case FLASH_RTS5918_EX_OP_3BYTE_MODE:
+		ret = flash_exit_4byte(dev);
+		break;
+	case FLASH_RTS5918_EX_OP_SELECT_CS: {
+		struct flash_rts5918_dev_data *dev_data = dev->data;
+		uint8_t cs = (uint8_t)(in & 0xFFU);
+
+		if (cs > 1U) {
+			ret = -EINVAL;
+			break;
+		}
+		dev_data->cs = cs;
+		ret = 0;
+		break;
+	}
 	}
 
 	// k_sem_give(&dev_data->sem);
@@ -1322,10 +1347,19 @@ static int flash_rts5918_init(const struct device *dev)
 	uint32_t ret = 0;
 	int rc;
 
-	/* Setup SPIC pins */
+	/* Setup SPIC pins.
+	 *
+	 * An instance with no pinctrl-0 (e.g. the internal-eflash SPIC1
+	 * controller on Bison, whose SER lines are not brought out) will
+	 * make pinctrl_apply_state return -ENOENT. That's expected: the
+	 * internal flash has no pads to mux, so we log-and-continue
+	 * instead of failing init.
+	 */
 	rc = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-	if (rc < 0) {
-		LOG_ERR("eSPI pinctrl setup failed (%d)", rc);
+	if (rc == -ENOENT) {
+		LOG_WRN("SPIC @%p: no pinctrl-0 (internal eflash?)", spic_reg);
+	} else if (rc < 0) {
+		LOG_ERR("SPIC pinctrl setup failed (%d)", rc);
 		return rc;
 	}
 
@@ -1512,28 +1546,6 @@ void flash_rts5918_saf_erase_sector_handler(const struct device *dev, const uint
 	// LOG_HEXDUMP_INF(mmap_addr, 32, "read flash");
 }
 
-static struct flash_rts5918_dev_data flash_rts5918_data = {
-	.command_default = {
-		.instruction = {
-				.bus_width = SPIC_CFG_BUS_SINGLE,
-				.disabled = 0,
-			},
-		.address = {
-				.bus_width = SPIC_CFG_BUS_SINGLE,
-				.size = SPIC_CFG_ADDR_SIZE_24,
-				.disabled = 0,
-			},
-		.alt = {
-				.size = 0,
-				.disabled = 1,
-			},
-		.dummy_count = 0,
-		.data = {
-				.bus_width = SPIC_CFG_BUS_SINGLE,
-			},
-	},
-};
-
 #define RTS5918_FLASH_PINCTRL_DEF(inst) PINCTRL_DT_INST_DEFINE(inst)
 
 
@@ -1544,15 +1556,41 @@ static struct flash_rts5918_dev_data flash_rts5918_data = {
 				.write_block_size = FLASH_WRITE_BLK_SZ,                      \
 				.erase_value = 0xff,                                         \
 			},                                                               \
-		.enter_4ba = DT_INST_PROP_OR(n, enter_4byte_addr, inst),                \
+		.enter_4ba = DT_INST_PROP_OR(inst, enter_4byte_addr, 0),                \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                           \
+	};
+
+#define RTS5918_FLASH_DATA(inst)                                                                     \
+	static struct flash_rts5918_dev_data flash_rts5918_data_##inst = {                           \
+		.command_default = {                                                                 \
+			.instruction = {                                                             \
+					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
+					.disabled = 0,                                               \
+				},                                                                   \
+			.address = {                                                                 \
+					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
+					.size = SPIC_CFG_ADDR_SIZE_24,                               \
+					.disabled = 0,                                               \
+				},                                                                   \
+			.alt = {                                                                     \
+					.size = 0,                                                   \
+					.disabled = 1,                                               \
+				},                                                                   \
+			.dummy_count = 0,                                                            \
+			.data = {                                                                    \
+					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
+				},                                                                   \
+		},                                                                                   \
+		.cs = 0,                                                                             \
 	};
 
 #define RTS5918_FLASH_DEVICE_INIT(index)                                                             \
 	RTS5918_FLASH_PINCTRL_DEF(index);                                                            \
 	RTS5918_FLASH_CONFIG(index);                                                                 \
-	DEVICE_DT_INST_DEFINE(index, &flash_rts5918_init, NULL, &flash_rts5918_data, &flash_rts5918_config_##index,   \
-			      PRE_KERNEL_1, CONFIG_FLASH_INIT_PRIORITY,                     \
+	RTS5918_FLASH_DATA(index);                                                                   \
+	DEVICE_DT_INST_DEFINE(index, &flash_rts5918_init, NULL, &flash_rts5918_data_##index,         \
+			      &flash_rts5918_config_##index,                                         \
+			      PRE_KERNEL_1, CONFIG_FLASH_INIT_PRIORITY,                              \
 			      &flash_rts5918_api);
 
 DT_INST_FOREACH_STATUS_OKAY(RTS5918_FLASH_DEVICE_INIT)
