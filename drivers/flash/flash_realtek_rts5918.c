@@ -8,6 +8,8 @@
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
 
 #define PINCTRL_STATE_EXTALT	PINCTRL_STATE_PRIV_START
+#define PINCTRL_STATE_CS0	(PINCTRL_STATE_PRIV_START + 1U)
+#define PINCTRL_STATE_CS1	(PINCTRL_STATE_PRIV_START + 2U)
 
 #define FLASH_PAGE_SZ      256
 #define FLASH_WRITE_BLK_SZ DT_PROP(SOC_NV_FLASH_NODE, write_block_size)
@@ -1356,13 +1358,25 @@ static int flash_rts5918_ex_op(const struct device *dev, uint16_t opcode, const 
 		ret = flash_exit_4byte(dev);
 		break;
 	case FLASH_RTS5918_EX_OP_SELECT_CS: {
+		const struct flash_rts5918_dev_config *config = dev->config;
 		struct flash_rts5918_dev_data *dev_data = dev->data;
 		uint8_t cs = (uint8_t)(in & 0xFFU);
+		int rc;
 
 		if (cs > 1U) {
 			ret = -EINVAL;
 			break;
 		}
+
+		rc = pinctrl_apply_state(config->pcfg,
+					 (cs == 0U) ? PINCTRL_STATE_CS0
+						    : PINCTRL_STATE_CS1);
+		if (rc < 0 && rc != -ENOENT) {
+			LOG_ERR("SPIC cs%u pinctrl apply failed (%d)", cs, rc);
+			ret = rc;
+			break;
+		}
+
 		dev_data->cs = cs;
 		ret = 0;
 		break;
