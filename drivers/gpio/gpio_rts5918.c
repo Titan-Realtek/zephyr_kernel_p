@@ -454,7 +454,8 @@ static void gpio_rts5918_isr(const void *arg)
 		if (gcr[pin] & GPIO_GCR_INTSTS_Msk) {
 			gcr[pin] |= GPIO_GCR_INTSTS_Msk;
 #if RTS5918_GPIO_HAS_KBD
-			if ((&gcr[pin] ==  0x40230170) || (&gcr[pin] ==  0x40230174)) {
+			if (((uintptr_t)&gcr[pin] == 0x40230170UL) ||
+			    ((uintptr_t)&gcr[pin] == 0x40230174UL)) {
 				input_kbd_matrix_poll_start(kbd_dev);
 			}
 #endif
