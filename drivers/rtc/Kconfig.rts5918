@@ -1,7 +1,7 @@
 # Copyright (c) 2025, Realtek, SIBG-SD7
 # SPDX-License-Identifier: Apache-2.0
 
-config RTC_RTS5918
+config RTC_REALTEK_RTS5918
 	bool "Realtek RTS5918 rtc driver"
 	default y
 	depends on CLOCK_CONTROL
