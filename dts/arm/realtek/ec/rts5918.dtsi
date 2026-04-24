@@ -69,7 +69,7 @@
 		interrupt-parent = <&nvic>;
 		ranges;
 
-		bbram: bb-ram@20200000 {
+		bbram0: bb-ram@20200000 {
 			compatible = "realtek,rts5918-bbram";
 			reg = <0x20200000 0x100>;
 			status = "okay";
