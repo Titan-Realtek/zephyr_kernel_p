@@ -641,13 +641,44 @@
 			#pwm-cells = <3>;
 		};
 
-		pwmled1: pwm@40252D00 {
+		pwmled1: pwm@40252d00 {
 			compatible = "realtek,rts5918-pwm";
 			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED1_PWR>;
 			clock-names = "pwm";
-			reg = <0x40252D00 0x18>;
+			reg = <0x40252d00 0x18>;
 			status = "disabled";
 			#pwm-cells = <3>;
+			pwm-led;
+		};
+
+		pwmled2: pwm@40252e00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED3_PWR>;
+			clock-names = "pwm";
+			reg = <0x40252e00 0x18>;
+			status = "disabled";
+			#pwm-cells = <3>;
+			pwm-led;
+		};
+
+		pwmled3: pwm@40252f00 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED4_PWR>;
+			clock-names = "pwm";
+			reg = <0x40252f00 0x18>;
+			status = "disabled";
+			#pwm-cells = <3>;
+			pwm-led;
+		};
+
+		pwmled4: pwm@40253000 {
+			compatible = "realtek,rts5918-pwm";
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED2_PWR>;
+			clock-names = "pwm";
+			reg = <0x40253000 0x18>;
+			status = "disabled";
+			#pwm-cells = <3>;
+			pwm-led;
 		};
 
 		/*

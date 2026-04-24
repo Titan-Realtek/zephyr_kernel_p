@@ -14,6 +14,9 @@ properties:
     pwm-invert:
       type: boolean
 
+    pwm-led:
+      type: boolean
+
     "#pwm-cells":
       const: 3
 

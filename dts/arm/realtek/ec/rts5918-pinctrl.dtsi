@@ -14,99 +14,99 @@
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(80, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc2_gpio081: adc2_gpio081
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(81, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc3_gpio082: adc3_gpio082
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(82, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc4_gpio083: adc4_gpio083
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(83, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 
 	/omit-if-no-ref/ adc5_gpio084: adc5_gpio084
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(84, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc6_gpio085: adc6_gpio085
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(85, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc7_gpio086: adc7_gpio086
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(86, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc8_gpio087: adc8_gpio087
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(87, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 
 	/omit-if-no-ref/ adc9_gpio088: adc9_gpio088
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(88, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc10_gpio089: adc10_gpio089
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(89, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc11_gpio090: adc11_gpio090
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(90, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc12_gpio091: adc12_gpio091
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(91, FUNC1)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc13_gpio092: adc13_gpio092
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(92, FUNC3)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc14_gpio093: adc14_gpio093
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(93, FUNC3)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc15_gpio094: adc15_gpio094
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(94, FUNC3)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	/omit-if-no-ref/ adc16_gpio095: adc16_gpio095
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(95, FUNC3)>;
 		input-enable;
-		input-schmitt-enable;		
+		input-schmitt-enable;
 	};
 	//                  ADC PINCTRL SETTING END
 	/* PS2 PINCTRL SETTING START */
@@ -186,6 +186,13 @@
 	/omit-if-no-ref/ led1_gpio138: led1_gpio138
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(138, FUNC1)>;
+			input-enable;
+			input-schmitt-enable;
+	};
+
+	/omit-if-no-ref/ led2_gpio059: led2_gpio059
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX(59, FUNC1)>;
 			input-enable;
 			input-schmitt-enable;
 	};
