@@ -661,7 +661,13 @@ static void promt0_ibf_isr(const struct device *dev)
 	if (promt0_reg->STS & ACPI_STS_IBF) {
 		bool is_cmd = (promt0_reg->STS & ACPI_STS_CMDSEL) ? true : false;
 
-		pvt->data = (uint8_t)promt0_reg->IB;
+		/*
+		 * Leave the data byte in IB; reading it clears IBF and would
+		 * let the host overwrite it before the upper layer (IntEc1Ibf
+		 * / SmapiIntInputBufferFull) latches it. The app reads IDR3
+		 * itself.
+		 */
+		pvt->data = 0;
 		pvt->type = is_cmd ? ESPIHUB_PVT_IO_BATT_CMD_IBF
 				   : ESPIHUB_PVT_IO_BATT_DATA_IBF;
 
@@ -872,7 +878,13 @@ static void promt2_ibf_isr(const struct device *dev)
 	if (promt2_reg->STS & ACPI_STS_IBF) {
 		bool is_cmd = (promt2_reg->STS & ACPI_STS_CMDSEL) ? true : false;
 
-		pvt->data = (uint8_t)promt2_reg->IB;
+		/*
+		 * Leave the data byte in IB; reading it clears IBF and would
+		 * let the host overwrite it before the upper layer (IntEc3Ibf
+		 * via Full_Interrupt_Handler) latches it. The app reads
+		 * IDR_EC_API itself.
+		 */
+		pvt->data = 0;
 		pvt->type = is_cmd ? ESPIHUB_PVT_IO_4CCCMD_CMD_IBF
 				   : ESPIHUB_PVT_IO_4CCCMD_DATA_IBF;
 
@@ -975,11 +987,12 @@ static void promt3_ibf_isr(const struct device *dev)
 	if (promt3_reg->STS & ACPI_STS_IBF) {
 		bool is_cmd = (promt3_reg->STS & ACPI_STS_CMDSEL) ? true : false;
 
-		/* Latch the data byte from the input buffer (read clears IBF
-		 * on the host side; the EC-side IBF clear happens via the
-		 * STS_CLR_IBF_FULL bit further on if needed).
+		/*
+		 * Leave the data byte in IB; reading it clears IBF and would
+		 * let the host overwrite it before the upper layer (IntEc2Ibf)
+		 * latches it. The app reads IDR_ES_NVS itself.
 		 */
-		pvt->data = (uint8_t)promt3_reg->IB;
+		pvt->data = 0;
 		pvt->type = is_cmd ? ESPIHUB_PVT_IO_NVS_CMD_IBF
 				   : ESPIHUB_PVT_IO_NVS_DATA_IBF;
 
