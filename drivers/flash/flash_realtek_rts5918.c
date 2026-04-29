@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(flash_rts5918);
 #include <zephyr/device.h>
 #include <zephyr/drivers/flash.h>
 #ifdef CONFIG_FLASH_EX_OP_ENABLED
-#include <zephyr/drivers/flash/rts5918_flash_api_ex.h>
+#include <zephyr/drivers/flash/rts5918_flash_api.h>
 #endif
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
