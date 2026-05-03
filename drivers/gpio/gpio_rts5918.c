@@ -504,13 +504,26 @@ static int gpio_rts5918_intr_config(const struct device *port, gpio_pin_t pin,
 		 * because DISABLED also leaves INTCTRL untouched.
 		 */
 #endif
-		cfg_val &= ~GPIO_GCR_INTEN_Msk;
-		*gcr = cfg_val;
-		for(int i =0 ; i< config->num_pins;i++){
-			interrupt_en_check |= config->reg_base[i];
-		}
-		if((interrupt_en_check & GPIO_GCR_INTEN_Msk) == 0x0){
-			irq_disable(pin_index);
+		{
+			/* Race fix: clearing this pin's INTEN, scanning the bank's
+			 * remaining INTENs, and conditionally calling irq_disable()
+			 * must be one critical section. Otherwise a concurrent caller
+			 * enabling INTEN on a different pin between the scan and the
+			 * NVIC disable would have its enable silently undone (the
+			 * vector gets masked even though that other pin still wants
+			 * it). Holding irq_lock here also stops the GPIO ISR from
+			 * firing mid-update on this same bank.
+			 */
+			unsigned int key = irq_lock();
+			cfg_val &= ~GPIO_GCR_INTEN_Msk;
+			*gcr = cfg_val;
+			for (int i = 0; i < config->num_pins; i++) {
+				interrupt_en_check |= config->reg_base[i];
+			}
+			if ((interrupt_en_check & GPIO_GCR_INTEN_Msk) == 0x0) {
+				irq_disable(pin_index);
+			}
+			irq_unlock(key);
 		}
 		return 0;
 #ifdef CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT
