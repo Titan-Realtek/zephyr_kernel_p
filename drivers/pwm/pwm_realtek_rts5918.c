@@ -85,7 +85,6 @@ static int pwm_rts5918_get_cycles_per_sec(const struct device *dev, uint32_t cha
 					  uint64_t *cycles)
 {
 	const struct pwm_rts5918_config *const pwm_config = dev->config;
-	volatile struct pwm_regs *pwm_regs = pwm_config->pwm_regs;
 
 	if (cycles) {
 		// if ((uintptr_t)pwm_regs == 0x40252D00) {
