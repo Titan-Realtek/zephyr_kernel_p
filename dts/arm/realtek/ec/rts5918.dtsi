@@ -39,7 +39,7 @@
 		};
 	};
 
-	flash0: flash@2000B400 {
+	flash0: flash@20000400 {
 		reg = <0x20000400 0x6FC00>;
 	};
 
