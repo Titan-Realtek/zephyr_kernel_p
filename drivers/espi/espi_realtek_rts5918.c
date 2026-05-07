@@ -3232,7 +3232,7 @@ static void espi_rst_isr(const struct device *dev)
 	uint32_t status = espi_reg->ERSTCFG;
 
 	espi_reg->ERSTCFG |= ESPI_ERSTCFG_RSTSTS;
-	espi_reg->ERSTCFG ^= ESPI_ERSTCFG_RSTPOL;
+	//espi_reg->ERSTCFG ^= ESPI_ERSTCFG_RSTPOL;
 
 	if (status & ESPI_ERSTCFG_RSTSTS) {
 		if (status & ESPI_ERSTCFG_RSTPOL) {
@@ -3281,14 +3281,14 @@ static void espi_bus_reset_setup(const struct device *dev)
 	espi_reg->ERSTCFG = ESPI_ERSTCFG_RSTINTEN;
 	espi_reg->ERSTCFG = ESPI_ERSTCFG_RSTMONEN;
 
-	if (espi_reg->ERSTCFG & ESPI_ERSTCFG_RSTSTS) {
-		/* high to low */
-		espi_reg->ERSTCFG =
-			ESPI_ERSTCFG_RSTMONEN | ESPI_ERSTCFG_RSTPOL | ESPI_ERSTCFG_RSTINTEN;
-	} else {
+	// if (espi_reg->ERSTCFG & ESPI_ERSTCFG_RSTSTS) {
+	// 	/* high to low */
+	// 	espi_reg->ERSTCFG =
+	// 		ESPI_ERSTCFG_RSTMONEN | ESPI_ERSTCFG_RSTPOL | ESPI_ERSTCFG_RSTINTEN;
+	// } else {
 		/* low to high */
 		espi_reg->ERSTCFG = ESPI_ERSTCFG_RSTMONEN | ESPI_ERSTCFG_RSTINTEN;
-	}
+	//}
 
 	NVIC_ClearPendingIRQ(DT_IRQ_BY_NAME(DT_DRV_INST(0), bus_rst, irq));
 
