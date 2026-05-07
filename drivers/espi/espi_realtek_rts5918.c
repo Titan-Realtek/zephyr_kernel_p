@@ -2015,9 +2015,11 @@ static int vw_signal_set_valid(const struct device *dev, enum espi_vwire_signal 
 	return 0;
 }
 
+static void espi_flash_chg_isr(const struct device *dev);
+
 static void vw_ch_isr_wa_cb(struct k_work *work)
 {
-	espi_vw_ch_isr(DEVICE_DT_GET(DT_DRV_INST(0)));
+	espi_flash_chg_isr(DEVICE_DT_GET(DT_DRV_INST(0)));
 }
 static K_WORK_DELAYABLE_DEFINE(vw_ch_isr_wa, vw_ch_isr_wa_cb);
 
@@ -3239,15 +3241,15 @@ static void espi_rst_isr(const struct device *dev)
 		} else {
 			/* rst pin low go high trigger interrupt */
 			evt.evt_data = 0;
-// #ifdef CONFIG_ESPI_VWIRE_CHANNEL
-// 			espi_vw_ch_setup(dev);
-// 			espi_reg->ESPICFG = data->config_data;
-// 			if (espi_reg->EVCFG & ESPI_EVCFG_CHEN) {
-// 				k_timeout_t delay = K_MSEC(VW_RESET_DELAY);
+#ifdef CONFIG_ESPI_VWIRE_CHANNEL
+			//espi_vw_ch_setup(dev);
+			//espi_reg->ESPICFG = data->config_data;
+			//if (espi_reg->EVCFG & ESPI_EVCFG_CHEN) {
+				k_timeout_t delay = K_MSEC(VW_RESET_DELAY);
 
-// 				k_work_schedule(&vw_ch_isr_wa, delay);
-// 			}
-// #endif
+				k_work_schedule(&vw_ch_isr_wa, delay);
+			//}
+#endif
 
 #ifdef CONFIG_ESPI_VWIRE_CHANNEL
 			espi_vw_ch_setup(dev);
