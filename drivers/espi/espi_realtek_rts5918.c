@@ -1219,7 +1219,8 @@ static void espi_periph_ch_isr(const struct device *dev)
 						break;
 				}
 				// MBX_MAILBOX_REGISTER_0 = ioshort_evt->data;
-				IntMbx();
+				if(MBX_HOST_TO_EC_MAILBOX_REGISTER != 0)
+					IntMbx();
 			} else {
 				/* Host Read */
 				uint32_t value = 0;
