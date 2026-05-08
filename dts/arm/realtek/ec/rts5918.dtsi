@@ -1049,9 +1049,7 @@
 
 	swj_port:swj_port{
 		compatible = "swj-connector";
-		pinctrl-0 = < &jtag_tdi_gpio105
-					  &jtag_tdo_gpio104
-					  &jtag_rst_gpio58
+		pinctrl-0 = < 
 					  &jtag_clk_gpio107
 					  &jtag_tms_gpio106 >;
 		pinctrl-names = "default";

@@ -40,3 +40,4 @@ void soc_early_init_hook(void)
 		LOG_ERR("SWJ init failed");
 	}
 }
+SYS_INIT(soc_early_init_hook, PRE_KERNEL_1, 0);
