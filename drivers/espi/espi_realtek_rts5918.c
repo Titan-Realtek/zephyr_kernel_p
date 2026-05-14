@@ -1171,7 +1171,8 @@ static void espi_periph_ch_isr(const struct device *dev)
 		// Handle Bios debug port ch1 (86h)
 		if(io_address == 0x86)
 		{
-			evt.evt_details |= (ESPI_PERIPHERAL_INDEX_4 << 16);
+			evt.evt_details = ESPI_PERIPHERAL_DEBUG_PORT80;
+			evt.evt_details |= (ESPI_PERIPHERAL_INDEX_1 << 16);
 		}
 		// Handle mailbox index (1610h)
 		else if(io_address == 0x1610) {
@@ -3385,11 +3386,11 @@ static int espi_rts5918_init(const struct device *dev)
 		goto exit;
 	}
 
-	rc = espi_promt1_setup(dev);
-	if (rc != 0) {
-		LOG_ERR("eSPI Promt1 setup failed");
-		goto exit;
-	}
+	//rc = espi_promt1_setup(dev);
+	// if (rc != 0) {
+	// 	LOG_ERR("eSPI Promt1 setup failed");
+	// 	goto exit;
+	// }
 	rc = espi_promt2_setup(dev);
 	if (rc != 0) {
 		LOG_ERR("eSPI Promt2 setup failed");
