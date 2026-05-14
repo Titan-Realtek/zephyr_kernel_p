@@ -658,6 +658,7 @@ static void promt0_ibf_isr(const struct device *dev)
 		(struct rts5918_pvt_io_evt *)&evt.evt_data;
 
 	if (promt0_reg->STS & ACPI_STS_IBF) {
+		//printk("promt0_ibf_isr\r\n");
 		bool is_cmd = (promt0_reg->STS & ACPI_STS_CMDSEL) ? true : false;
 
 		/*
@@ -2352,11 +2353,11 @@ active_h = vw_channel_list[signal].active_high;
 		return -EIO;
 	}
 
-			if (vw_data & valid_msk) {
+			//if (vw_data & valid_msk) {
 			*level = !!(vw_data & lev_msk);
-		}else{
-		*level = active_h?1:0;
-	}
+		//}else{
+		//*level = active_h?1:0;
+	//}
 	// else {
 			// 	/* Not valid */
 			// 	LOG_ERR("Mask NOT valid");
