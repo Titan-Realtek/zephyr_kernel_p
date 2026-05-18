@@ -115,7 +115,7 @@ static int i2c_rts5918_reset_i2c(const struct device *dev)
 	/* system reset I2C module */
 	APB_I2C_RESET |= (1 << channel);
 	APB_I2C_RESET &= ~(1 << channel);
- 
+
 	/* reinitialize I2C module */
 	return i2c_rts5918_initialize(dev);
 }
@@ -348,6 +348,8 @@ static int i2c_rts5918_recover_bus_orig(const struct device *dev)
 static int i2c_rts5918_initialize(const struct device *dev)
 {
 	const struct i2c_rts5918_config *const config = dev->config;
+	uint32_t sda_timeout = config->sda_timeout_value * CONFIG_I2C_DW_CLOCK_SPEED * 1000;
+	uint32_t scl_timeout = config->scl_timeout_value * CONFIG_I2C_DW_CLOCK_SPEED * 1000;
 	int ret;
 
 	if (!device_is_ready(config->clk_dev)) {
@@ -360,11 +362,19 @@ static int i2c_rts5918_initialize(const struct device *dev)
 		return ret;
 	}
 
-	(void)config->dw_i2c_dev;
-	(void)config->sda_timeout_value;
-	(void)config->scl_timeout_value;
-	(void)config->sda_gpio;
-	(void)config->scl_gpio;
+	// (void)config->dw_i2c_dev;
+	// (void)config->sda_timeout_value;
+	// (void)config->scl_timeout_value;
+	// (void)config->sda_gpio;
+	// (void)config->scl_gpio;
+	uint32_t reg_base = get_regs(config->dw_i2c_dev);
+	/* clear enable register */
+	clear_bit_enable_en(reg_base);
+	/* disable block mode */
+	clear_bit_enable_block(reg_base);
+
+	write_sdatimeout(sda_timeout, reg_base);
+	write_scltimeout(scl_timeout, reg_base);
 
 	return 0;
 }
@@ -379,13 +389,7 @@ static int i2c_rts5918_initialize(const struct device *dev)
 #define I2C_DEVICE_INIT_RTS5918(n)                                                                 \
 	static const struct i2c_rts5918_config i2c_rts5918_##n##_config = {                        \
 		DEV_CONFIG_CLK_DEV_INIT(n),                                                        \
-		/* Phase 10.10: .dw_i2c_dev removed — phandle dropped from \
-		 * the wrapper node (would create a DT init-priority \
-		 * dependency on dw forcing wrapper to run AFTER dw, but we \
-		 * need the opposite). The shim init() never reads this \
-		 * field anyway. \
-		 */                                                                                \
-		.dw_i2c_dev = NULL,                                                                \
+		.dw_i2c_dev = DEVICE_DT_GET(DT_INST_PHANDLE(n, dw_i2c_dev)),                                                                \
 		.sda_timeout_value = DT_INST_PROP(n, sda_timeout_value),                           \
 		.scl_timeout_value = DT_INST_PROP(n, scl_timeout_value),                           \
 		.sda_gpio = DT_INST_PROP(n, sda_gpio_pin),                                         \
