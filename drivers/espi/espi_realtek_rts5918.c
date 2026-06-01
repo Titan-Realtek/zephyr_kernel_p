@@ -1071,6 +1071,7 @@ static int espi_promt3_setup(const struct device *dev)
 	promt3_reg->PTADDR = 0x1631 | (0x03 << ACPI_PTADDR_OFFSET_Pos);
 	promt3_reg->VWCTRL1 = ACPI_VWCTRL1_ACTEN;
 	promt3_reg->INTEN = ACPI_INTEN_IBFINTEN;
+	promt3_reg->INTEN |= ACPI_INTEN_OBFINTEN;
 
 	NVIC_ClearPendingIRQ(DT_IRQ_BY_NAME(DT_DRV_INST(0), promt3_ibf, irq));
 	NVIC_ClearPendingIRQ(DT_IRQ_BY_NAME(DT_DRV_INST(0), promt3_obe, irq));
