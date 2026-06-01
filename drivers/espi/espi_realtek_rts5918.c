@@ -1026,6 +1026,12 @@ static void promt3_obe_isr(const struct device *dev)
 
 	pvt->type = ESPIHUB_PVT_IO_NVS_OBE;
 	pvt->data = 0;
+
+	LOG_ERR("PM3 obe isr");
+	promt3_reg->VWCTRL1 = 0;
+	promt3_reg->PTADDR = 0x1631 | (0x03 << ACPI_PTADDR_OFFSET_Pos);
+	promt3_reg->VWCTRL1 = ACPI_VWCTRL1_ACTEN;
+
 	espi_send_callbacks(&espi_data->callbacks, dev, evt);
 }
 
@@ -1060,8 +1066,9 @@ static int espi_promt3_setup(const struct device *dev)
 		promt3_reg->STS |= ACPI_STS_CLR_IBF_FULL;
 	}
 
-	promt3_reg->PTADDR =
-		CONFIG_ESPI_PERIPHERAL_HOST_CMD_PM3_PARAM_PORT_NUM | (0x04 << ACPI_PTADDR_OFFSET_Pos);
+	// promt3_reg->PTADDR =
+	// 	CONFIG_ESPI_PERIPHERAL_HOST_CMD_PM3_PARAM_PORT_NUM | (0x05 << ACPI_PTADDR_OFFSET_Pos);
+	promt3_reg->PTADDR = 0x1631 | (0x03 << ACPI_PTADDR_OFFSET_Pos);
 	promt3_reg->VWCTRL1 = ACPI_VWCTRL1_ACTEN;
 	promt3_reg->INTEN = ACPI_INTEN_IBFINTEN;
 
@@ -1147,6 +1154,8 @@ static void espi_periph_ch_isr(const struct device *dev)
 	uint32_t status = espi_reg->EPSTS;
 	uint32_t config = espi_reg->EPCFG;
 
+	volatile struct acpi_reg *const promt3_reg = espi_config->promt3_reg;
+
 	if (status & ESPI_EPSTS_CLRSTS) {
 		evt.evt_data = config & ESPI_EPCFG_CHEN ? 1 : 0;
 		espi_send_callbacks(&data->callbacks, dev, evt);
@@ -1184,7 +1193,8 @@ static void espi_periph_ch_isr(const struct device *dev)
 		}
 
 		/* The data in IOSHORT Input Buffer */
-		ioshort_evt->data = (espi_reg->IOSHORTRDDATA & 0xff);
+		if(io_address != 0x1630)
+			ioshort_evt->data = (espi_reg->IOSHORTRDDATA & 0xff);
 
     	// LOG_ERR("addr 0x%X value 0x%X", io_address, ioshort_evt->data);
 		if(io_address == 0x86) {
@@ -1240,7 +1250,25 @@ static void espi_periph_ch_isr(const struct device *dev)
 				// LOG_ERR("g_mailbox_index %x %x",g_mailbox_index, value);
 				espi_reg->IOSHORTRDDATA = value << 8;
 			}
+		}else if(io_address == 0x1630 /* data */) {
+			LOG_ERR("0x1630");
+			evt.evt_type    = ESPI_BUS_PERIPHERAL_NOTIFICATION;
+			evt.evt_details = ESPI_PERIPHERAL_HOST_IO_PVT;
+			evt.evt_data    = ESPI_PERIPHERAL_NODATA;
+
+			ioshort_evt->data = 0;
+			ioshort_evt->type = ESPIHUB_PVT_IO_NVS_DATA_IBF;
+			// NVIC_DisableIRQ((DT_IRQ_BY_NAME(DT_DRV_INST(0), promt3_ibf, irq)));
+
+			// promt3_reg->PTADDR =
+				// CONFIG_ESPI_PERIPHERAL_HOST_CMD_PM3_PARAM_PORT_NUM | (0x04 << ACPI_PTADDR_OFFSET_Pos);
+
+			espi_send_callbacks(&data->callbacks, dev, evt);
+
 		}
+		// else{
+			// LOG_ERR("unknow I/O port [0x%04x]", io_address);
+		// }
 		int key = irq_lock();
 		espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
 		espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
