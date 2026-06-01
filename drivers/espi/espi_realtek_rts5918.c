@@ -1027,7 +1027,7 @@ static void promt3_obe_isr(const struct device *dev)
 	pvt->type = ESPIHUB_PVT_IO_NVS_OBE;
 	pvt->data = 0;
 
-	LOG_ERR("PM3 obe isr");
+	// LOG_ERR("PM3 obe isr");
 	promt3_reg->VWCTRL1 = 0;
 	promt3_reg->PTADDR = 0x1631 | (0x03 << ACPI_PTADDR_OFFSET_Pos);
 	promt3_reg->VWCTRL1 = ACPI_VWCTRL1_ACTEN;
@@ -1252,7 +1252,7 @@ static void espi_periph_ch_isr(const struct device *dev)
 				espi_reg->IOSHORTRDDATA = value << 8;
 			}
 		}else if(io_address == 0x1630 /* data */) {
-			LOG_ERR("0x1630");
+			// LOG_ERR("0x1630");
 			evt.evt_type    = ESPI_BUS_PERIPHERAL_NOTIFICATION;
 			evt.evt_details = ESPI_PERIPHERAL_HOST_IO_PVT;
 			evt.evt_data    = ESPI_PERIPHERAL_NODATA;
