@@ -16,3 +16,8 @@ config PS2_REALTEK_RTS5918
 	  / enable_callback / disable_callback). RX is callback-driven from
 	  the controller IRQ; TX is blocking on a tx_sync_sem until the
 	  Transaction Done Status interrupt fires.
+
+config PS2_REALTEK_FW_INHIBIT
+	bool "Enable PS2 FW inhibit"
+	default y
+

@@ -49,6 +49,8 @@ struct ps2_rts5918_data {
 	struct k_sem tx_sync_sem;
 };
 
+static uint32_t temp_cnt = 0;
+
 static int ps2_rts5918_configure(const struct device *dev,
             ps2_callback_t callback_isr)
 {
@@ -117,10 +119,12 @@ static int ps2_rts5918_write(const struct device *dev, uint8_t value)
 	regs->INTEN |= BIT(PS2_INTEN_STRINTEN_Pos);
     /* set Tx data */
     regs->TXDAT = value & PS2_TXDAT_DATA_Msk;
+	temp_cnt = 1;
     /* manual trigger for Tx mode */
     regs->CTRL |= (1U << PS2_CTRL_TXSTR_Pos);
-
-	// LOG_INF("ps2_rts5918_write [0x%02x]", value);
+	k_busy_wait(15);
+	regs->CTRL &= ~BIT(PS2_CTRL_MDSEL_Pos);
+	// LOG_INF("ps2_rts5913_write [0x%02x]", value);
     // while((regs->STS & (1U << PS2_STS_TDS_Pos)) == 0); // wait until transfer done
     if (k_sem_take(&data->tx_sync_sem, PS2_TRANSACTION_TIMEOUT) != 0) {
         /* Change the PS/2 module to receive mode */
@@ -223,7 +227,11 @@ static int ps2_rts5918_is_status_rx_error(const uint32_t STS)
     return 0;
 }
 
-static uint32_t temp_cnt = 0;
+#ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
+#define GPIO_PS2_CLK *((uint32_t*)0x4023003C)
+#define GPIO_OUTPUT_L 0x10803
+#endif
+
 static void ps2_rts5918_isr(const struct device *dev)
 {
     const struct ps2_rts5918_config * const config = dev->config;
@@ -240,14 +248,7 @@ static void ps2_rts5918_isr(const struct device *dev)
 		 * first occurrence of an SOT interrupt.
 		 */
 		regs->INTEN &= ~BIT(PS2_INTEN_STRINTEN_Pos);
-		if (IS_BIT_SET(regs->CTRL, PS2_CTRL_MDSEL_Pos)) {
-			/* Change the PS/2 module to receive mode */
-			regs->CTRL &= ~BIT(PS2_CTRL_MDSEL_Pos);
-			temp_cnt = 1;
 
-			//k_sem_give(&data->tx_sync_sem);
-		}
-		LOG_DBG("SOT");
 		/* PS/2 End of Transaction */
     } else if (IS_BIT_SET(regs->STS, PS2_STS_TDS_Pos)) {
         regs->INTEN &= ~BIT(PS2_INTEN_TDSINTEN_Pos);
@@ -277,6 +278,10 @@ static void ps2_rts5918_isr(const struct device *dev)
 				// LOG_INF("Recv:0x%02x", data_in);
 				callback = data->callback_isr;
 				if (callback != NULL) {
+#ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
+					/* set clock low to prevent device send next byte */
+					GPIO_PS2_CLK = GPIO_OUTPUT_L;
+#endif
 					callback(dev, data_in);
 				}
 			}else{
