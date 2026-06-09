@@ -21,3 +21,7 @@ config PS2_REALTEK_FW_INHIBIT
 	bool "Enable PS2 FW inhibit"
 	default y
 
+config PS2_REALTEK_CLK_PIN
+	int "Clock Pin number"
+	default 68
+

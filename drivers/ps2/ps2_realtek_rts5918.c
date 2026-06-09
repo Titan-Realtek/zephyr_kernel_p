@@ -30,6 +30,12 @@ LOG_MODULE_REGISTER(ps2_realtek_rts5918, CONFIG_PS2_LOG_LEVEL);
  */
 #define PS2_TRANSACTION_TIMEOUT K_MSEC(2)
 
+#ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
+// #define GPIO_PS2_CLK *((uint32_t*)0x40230110)
+#define GPIO_PS2_CLK *((uint32_t*)(0x40230000 + 4*CONFIG_PS2_REALTEK_CLK_PIN))
+#define GPIO_OUTPUT_L 0x10803
+#endif
+
 typedef void (*ps2_rts5918_irq_init_fn_ptr)(void);
 struct ps2_rts5918_config {
     volatile struct ps2_regs * const regs;
@@ -152,6 +158,10 @@ static int ps2_rts5918_inhibit_interface(const struct device *dev)
 	if (k_sem_take(&data->lock, K_MSEC(10)) != 0) {
 		return -EACCES;
 	}
+#ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
+	/* set clock low to prevent device send next byte */
+	GPIO_PS2_CLK = GPIO_OUTPUT_L;
+#endif
     /* Reset all control */
 	regs->CTRL &= ~(1U << PS2_CTRL_EN_Pos);
     /* Clear status bits */
@@ -226,11 +236,6 @@ static int ps2_rts5918_is_status_rx_error(const uint32_t STS)
 	}
     return 0;
 }
-
-#ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
-#define GPIO_PS2_CLK *((uint32_t*)0x4023003C)
-#define GPIO_OUTPUT_L 0x10803
-#endif
 
 static void ps2_rts5918_isr(const struct device *dev)
 {
