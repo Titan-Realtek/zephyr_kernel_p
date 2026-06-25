@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+# Enable rts5918 image tool
+#CONFIG_REALTEK_rts5918_BOOTROM_HEADER=y
+CONFIG_REALTEK_RTS5918_IMG_HEADER=y
+
+# Serial Driver
+CONFIG_SERIAL=y
+CONFIG_UART_NS16550=y
+#CONFIG_UART_INTERRUPT_DRIVEN=y
+
+# Console
+CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=y
+
+# Enable GPIO
+CONFIG_GPIO=y
