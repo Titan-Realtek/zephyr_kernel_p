@@ -40,6 +40,7 @@ void soc_early_init_hook(void)
 		LOG_ERR("SWJ init failed");
 	}
 }
+SYS_INIT(soc_early_init_hook, PRE_KERNEL_1, 0);
 
 static int soc_disable_vout_130(void)
 {
@@ -47,8 +48,9 @@ static int soc_disable_vout_130(void)
     *((uint32_t*)0x40100114) |= BIT(2);
     k_busy_wait(10000);
     *((uint32_t*)0x40100114) &= ~BIT(2);
+
+	*(uint32_t *)0x402214C0 = 0x00001680;	// address
+	*(uint32_t *)0x402214C4 = 0x00000001;	// enable
+	*(uint32_t *)0x40100170 |= (0x1 << 1);
 }
 SYS_INIT(soc_disable_vout_130, PRE_KERNEL_2, 5);
- 
-
-SYS_INIT(soc_early_init_hook, PRE_KERNEL_1, 0);
