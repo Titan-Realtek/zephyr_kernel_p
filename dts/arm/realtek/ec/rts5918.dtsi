@@ -470,6 +470,50 @@
 			#size-cells = <0>;
 		};
 
+		i3c1: i3c@40004000 {
+			compatible = "realtek,rts5918-i3c";
+			reg = <0x40004000 0x1000>;
+			interrupt-parent = <&nvic>;
+			interrupts = <108 2>;
+			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C1_PWR>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+		};
+
+		i3c2: i3c@40006000 {
+			compatible = "realtek,rts5918-i3c";
+			reg = <0x40006000 0x1000>;
+			interrupt-parent = <&nvic>;
+			interrupts = <109 2>;
+			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C2_PWR>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+		};
+
+		i3c3: i3c@40007000 {
+			compatible = "realtek,rts5918-i3c";
+			reg = <0x40007000 0x1000>;
+			interrupt-parent = <&nvic>;
+			interrupts = <110 2>;
+			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C3_PWR>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+		};
+
+		i3c4: i3c@40003000 {
+			compatible = "realtek,rts5918-i3c";
+			reg = <0x40003000 0x1000>;
+			interrupt-parent = <&nvic>;
+			interrupts = <111 2>;
+			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C4_PWR>;
+			status = "disabled";
+			#address-cells = <3>;
+			#size-cells = <0>;
+		};
+
 		/*
 		 * Phase 10.9 — RTS5918 has 3 PS/2 controllers (datasheet
 		 * §36.2.51 + RL7088_SVD-master 3/RTS5918.h PS2_n_BASE):

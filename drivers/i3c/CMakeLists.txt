@@ -42,6 +42,25 @@ zephyr_library_sources_ifdef(
 )
 
 zephyr_library_sources_ifdef(
+  CONFIG_I3C_REALTEK_RTS5918
+  realtek/i3c_realtek_rts5918.c
+  realtek/src/rtk_i3c.c
+  realtek/src/rtk_i3c_bus.c
+)
+
+zephyr_library_sources_ifdef(
+  CONFIG_RTS5918_I3C_DMA
+  realtek/src/rtk_i3c_dma.c
+)
+
+zephyr_library_include_directories_ifdef(
+  CONFIG_I3C_REALTEK_RTS5918
+  realtek/include
+  realtek/src
+  realtek/src/core
+)
+
+zephyr_library_sources_ifdef(
   CONFIG_I3C_TEST
   i3c_test.c
 )

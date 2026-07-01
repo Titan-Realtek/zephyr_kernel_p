@@ -1,0 +1,55 @@
+# Copyright (c) 2026 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Realtek RTS5918 I3C controller/target
+
+compatible: "realtek,rts5918-i3c"
+
+include: [i3c-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
+    description: SCCON gate for the I3C IP clock.
+
+  target-mode:
+    type: boolean
+    description: Configure this I3C instance as a target instead of a primary controller.
+
+  static-addr:
+    type: int
+    description: Static address used when target-mode is enabled.
+
+  primary-controller-da:
+    type: int
+    description: Preferred dynamic address for the primary controller.
+
+  pid-msb:
+    type: int
+    description: Upper 16 bits of the 48-bit target provisioned ID.
+
+  pid-lsb:
+    type: int
+    description: Lower 32 bits of the 48-bit target provisioned ID.
+
+  bcr:
+    type: int
+    description: Target Bus Characteristics Register value.
+
+  dcr:
+    type: int
+    description: Target Device Characteristics Register value.
+
+  max-read-len:
+    type: int
+    description: Target maximum read length.
+
+  max-write-len:
+    type: int
+    description: Target maximum write length.
