@@ -103,7 +103,7 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 				sys_reg->ESPI_IO2_PAD |= SYSTEM_ESPI_CLK_PAD_DRIVING_Msk;
 				sys_reg->ESPI_IO2_PAD |= SYSTEM_ESPI_PAD_INPUTDET_Msk;
 				sys_reg->ESPI_IO3_PAD |= SYSTEM_ESPI_CLK_PAD_DRIVING_Msk;
-				sys_reg->ESPI_IO3_PAD |= SYSTEM_ESPI_PAD_INPUTDET_Msk;																
+				sys_reg->ESPI_IO3_PAD |= SYSTEM_ESPI_PAD_INPUTDET_Msk;
 				switch (clk_idx) {
 				case RTS5918_ESPI_PWR:
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__ESPI_Msk;
@@ -143,16 +143,16 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_EMI4_PWR:
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__EMI4_Msk;
-					break;	
+					break;
 				case RTS5918_EMI5_PWR:
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__EMI5_Msk;
-					break;	
+					break;
 				case RTS5918_EMI6_PWR:
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__EMI6_Msk;
-					break;	
+					break;
 				case RTS5918_EMI7_PWR:
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__EMI7_Msk;
-					break;	
+					break;
 				}
 			} else {
 				switch (clk_idx) {
@@ -194,16 +194,16 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_EMI4_PWR:
 					sys_reg->IPCLK0 &= ~SYSTEM_IPCLK0__EMI4_Msk;
-					break;	
+					break;
 				case RTS5918_EMI5_PWR:
 					sys_reg->IPCLK0 &= ~SYSTEM_IPCLK0__EMI5_Msk;
-					break;	
+					break;
 				case RTS5918_EMI6_PWR:
 					sys_reg->IPCLK0 &= ~SYSTEM_IPCLK0__EMI6_Msk;
-					break;	
+					break;
 				case RTS5918_EMI7_PWR:
 					sys_reg->IPCLK0 &= ~SYSTEM_IPCLK0__EMI7_Msk;
-					break;	
+					break;
 				}
 				if((sys_reg->IPCLK0 & ESPI_ALL_MSK) == 0x0){
 					sys_reg->SYSCLK &= ~SYSTEM_SYSCLK__ESPI_Msk;
@@ -213,84 +213,98 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 		case RTS5918_CLK_LEDPWM:
 			if( true == on_off ){
 				sys_reg->SYSCLK |= SYSTEM_SYSCLK__LED_PWM_Msk;
-				sys_reg->SYSCLKSEL |= (0x1 << 20);
+				sys_reg->SYSCLKSEL |= (0x0 << 20); // RC25M
 				switch (clk_idx) {
 				case RTS5918_LED1_PWR:
-					sys_reg->IPDIV1 |= (0x1 << 22); // 100M / DIV2
+					sys_reg->IPDIV1_b._LED1 = 0; // 25M / DIV780
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__LED1_Msk;
 					sys_reg->APBCLK0 |= SYSTEM_APBCLK0__LED1_Msk;
 					break;
 				case RTS5918_LED2_PWR:
+					sys_reg->IPDIV1_b._LED2 = 0; // 25M / DIV780
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__LED2_Msk;
 					sys_reg->APBCLK0 |= SYSTEM_APBCLK0__LED2_Msk;
 					break;
 				case RTS5918_LED3_PWR:
+					sys_reg->IPDIV1_b._LED3 = 0; // 25M / DIV780
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__LED3_Msk;
 					sys_reg->APBCLK0 |= SYSTEM_APBCLK0__LED3_Msk;
 					break;
 				case RTS5918_LED4_PWR:
+					sys_reg->IPDIV1_b._LED4 = 0; // 25M / DIV780
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__LED4_Msk;
 					sys_reg->APBCLK0 |= SYSTEM_APBCLK0__LED4_Msk;
 					break;
 				case RTS5918_PWM1_PWR:
-					sys_reg->IPDIV1 |= (0x1 << 14); // 100M / DIV2
+					sys_reg->IPDIV1 |= (0x10 << 14); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM1_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM1_Msk;
 					break;
 				case RTS5918_PWM2_PWR:
-					sys_reg->IPDIV1 |= (0x1 << 12); // 100M / DIV2
+					sys_reg->IPDIV1 |= (0x10 << 12); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM2_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM2_Msk;
 					break;
 				case RTS5918_PWM3_PWR:
+					sys_reg->IPDIV1 |= (0x10 << 10); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM3_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM3_Msk;
 					break;
 				case RTS5918_PWM4_PWR:
+					sys_reg->IPDIV1 |= (0x10 << 8); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM4_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM4_Msk;
 					break;
 				case RTS5918_PWM5_PWR:
+					sys_reg->IPDIV1 |= (0x10 << 6); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM5_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM5_Msk;
 					break;
 				case RTS5918_PWM6_PWR:
-					sys_reg->IPDIV1 |= (0x1 << 4); // 100M / DIV2
+					sys_reg->IPDIV1 |= (0x10 << 4); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM6_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM6_Msk;
 					break;
 				case RTS5918_PWM7_PWR:
+					sys_reg->IPDIV1 |= (0x10 << 2); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM7_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM7_Msk;
 					break;
 				case RTS5918_PWM8_PWR:
+					sys_reg->IPDIV1 |= (0x10 << 0); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM8_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM8_Msk;
 					break;
 				case RTS5918_PWM9_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 29); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM9_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM9_Msk;
-					break;	
+					break;
 				case RTS5918_PWM10_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 27); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM10_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM10_Msk;
-					break;	
+					break;
 				case RTS5918_PWM11_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 25); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM11_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM11_Msk;
-					break;	
+					break;
 				case RTS5918_PWM12_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 23); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM12_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM12_Msk;
-					break;	
+					break;
 				case RTS5918_PWM13_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 21); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM13_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM13_Msk;
-					break;	
+					break;
 				case RTS5918_PWM14_PWR:
+					sys_reg->IPDIV2 |= (0x10 << 19); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM14_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM14_Msk;
-					break;	
+					break;
 				}
 			} else {
 				switch (clk_idx) {
@@ -332,22 +346,22 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_PWM9_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM9_Msk;
-					break;	
+					break;
 				case RTS5918_PWM10_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM10_Msk;
-					break;	
+					break;
 				case RTS5918_PWM11_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM11_Msk;
-					break;	
+					break;
 				case RTS5918_PWM12_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM12_Msk;
-					break;	
+					break;
 				case RTS5918_PWM13_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM13_Msk;
-					break;	
+					break;
 				case RTS5918_PWM14_PWR:
 					sys_reg->IPCLK1 &= ~SYSTEM_IPCLK1__PWM14_Msk;
-					break;	
+					break;
 				}
 				if(((sys_reg->IPCLK0 & LED_ALL_MSK_CLK0) == 0x0) && ((sys_reg->IPCLK1 & LED_ALL_MSK_CLK1) == 0x0)){
 					sys_reg->SYSCLK &= ~SYSTEM_SYSCLK__LED_PWM_Msk;
@@ -484,7 +498,7 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 				if((sys_reg->IPCLK1 & I2C_ALL_MSK_CLK1) == 0x0){
 					sys_reg->SYSCLK &= ~SYSTEM_SYSCLK__I2C_Msk;
 				}
-			}		
+			}
 			break;
 		case RTS5918_CLK_RC25M:
 			if( true == on_off ){
@@ -714,7 +728,7 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_KBM_PWR:
 					sys_reg->IPCLK2 &= ~SYSTEM_IPCLK2__KBM_Msk;
-					
+
 					break;
 	/*          // wait new header
 				case RTS5918_LPC_PWR:
@@ -954,11 +968,11 @@ static int rts5918_clock_control_init(const struct device *dev)
 	if( (sys_reg->PLLCTRL & SYSTEM_PLLCTRL_DRDY_Msk) == 0x0){
 		sys_reg->PLLCTRL |= SYSTEM_PLLCTRL_PWREN_Msk;
 	}
-	
+
 	while( ((sys_reg->PLLCTRL & SYSTEM_PLLCTRL_DRDY_Msk) == 0x0) && (wf_cycle_count > (wf_now - wf_start))){
 		wf_now = k_cycle_get_32();
 	}
-	
+
 	if( (sys_reg->PLLCTRL & SYSTEM_PLLCTRL_DRDY_Msk) == 0x0 ){
 		LOG_ERR("system clk select PLL fail");
 		return -EIO;
@@ -972,7 +986,7 @@ static int rts5918_clock_control_init(const struct device *dev)
     sys_reg->LDOCTRL_b.LDO3PWREN = 1;
     sys_reg->LDO2WR_b.LDO2WREN = 1;
     sys_reg->LDO2WR_b.LDO2WREN = 0;
- 
+
     /* Enable RC32K */
     sys_reg->RC32KCTRL_b.PWREN = 1;
     sys_reg->LDO2WR_b._RC32KWR = 1;

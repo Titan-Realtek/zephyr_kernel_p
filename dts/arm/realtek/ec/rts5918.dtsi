@@ -659,7 +659,7 @@
 
 		pwmled2: pwm@40252e00 {
 			compatible = "realtek,rts5918-pwm";
-			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED3_PWR>;
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED2_PWR>;
 			clock-names = "pwm";
 			reg = <0x40252e00 0x18>;
 			status = "disabled";
@@ -669,7 +669,7 @@
 
 		pwmled3: pwm@40252f00 {
 			compatible = "realtek,rts5918-pwm";
-			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED4_PWR>;
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED3_PWR>;
 			clock-names = "pwm";
 			reg = <0x40252f00 0x18>;
 			status = "disabled";
@@ -679,7 +679,7 @@
 
 		pwmled4: pwm@40253000 {
 			compatible = "realtek,rts5918-pwm";
-			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED2_PWR>;
+			clocks = <&sccon RTS5918_CLK_LEDPWM RTS5918_LED4_PWR>;
 			clock-names = "pwm";
 			reg = <0x40253000 0x18>;
 			status = "disabled";
