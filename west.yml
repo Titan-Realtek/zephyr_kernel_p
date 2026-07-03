@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: realtek_tee
+      url-base: ssh://ctcsoc.rtkbf.com:29418/rtos      
 
   group-filter: [-babblesim, -optional]
 
@@ -327,8 +329,9 @@ manifest:
       groups:
         - crypto
     - name: trusted-firmware-m
-      revision: 60ebade5d3d381a210af90191e475d8870b8adbc
-      path: modules/tee/tf-m/trusted-firmware-m
+      revision: d3c8f94158dacb3a74772d01db135ef863be367a
+      path: zephyr_kernel_p/realtek/tee/trusted-firmware-m
+      remote: realtek_tee
       groups:
         - tee
     - name: trusted-firmware-a
