@@ -236,72 +236,72 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					sys_reg->APBCLK0 |= SYSTEM_APBCLK0__LED4_Msk;
 					break;
 				case RTS5918_PWM1_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 14); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 14); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM1_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM1_Msk;
 					break;
 				case RTS5918_PWM2_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 12); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 12); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM2_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM2_Msk;
 					break;
 				case RTS5918_PWM3_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 10); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 10); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM3_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM3_Msk;
 					break;
 				case RTS5918_PWM4_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 8); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 8); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM4_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM4_Msk;
 					break;
 				case RTS5918_PWM5_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 6); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 6); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM5_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM5_Msk;
 					break;
 				case RTS5918_PWM6_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 4); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 4); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM6_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM6_Msk;
 					break;
 				case RTS5918_PWM7_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 2); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 2); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM7_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM7_Msk;
 					break;
 				case RTS5918_PWM8_PWR:
-					sys_reg->IPDIV1 |= (0x10 << 0); // 25M / DIV1
+					sys_reg->IPDIV1 |= (2 << 0); // 25M / DIV1
 					sys_reg->IPCLK0 |= SYSTEM_IPCLK0__PWM8_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM8_Msk;
 					break;
 				case RTS5918_PWM9_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 29); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 29); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM9_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM9_Msk;
 					break;
 				case RTS5918_PWM10_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 27); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 27); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM10_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM10_Msk;
 					break;
 				case RTS5918_PWM11_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 25); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 25); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM11_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM11_Msk;
 					break;
 				case RTS5918_PWM12_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 23); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 23); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM12_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM12_Msk;
 					break;
 				case RTS5918_PWM13_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 21); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 21); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM13_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM13_Msk;
 					break;
 				case RTS5918_PWM14_PWR:
-					sys_reg->IPDIV2 |= (0x10 << 19); // 25M / DIV1
+					sys_reg->IPDIV2 |= (2 << 19); // 25M / DIV1
 					sys_reg->IPCLK1 |= SYSTEM_IPCLK1__PWM14_Msk;
 					sys_reg->APBCLK1 |= SYSTEM_APBCLK1__PWM14_Msk;
 					break;
