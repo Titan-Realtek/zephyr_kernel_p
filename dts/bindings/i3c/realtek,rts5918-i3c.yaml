@@ -18,6 +18,16 @@ properties:
     required: true
     description: SCCON gate for the I3C IP clock.
 
+  clock-frequency:
+    type: int
+    description: |
+      I3C IP functional clock frequency in Hz (125 MHz - 400 MHz). Used to
+      derive SCL divider and bus timing register values at runtime.
+
+  i3c-od-scl-hz:
+    type: int
+    description: I3C open-drain SCL frequency in Hz.
+
   target-mode:
     type: boolean
     description: Configure this I3C instance as a target instead of a primary controller.

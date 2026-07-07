@@ -1,0 +1,61 @@
+# Realtek I3C driver configuration options
+#
+# SPDX-License-Identifier: Apache-2.0
+
+DT_COMPAT_REALTEK_RTS5918_I3C := realtek,rts5918-i3c
+
+module = I3C_REALTEK
+module-str = i3c-realtek
+source "subsys/logging/Kconfig.template.log_config"
+
+config I3C_REALTEK
+	bool "Realtek I3C driver"
+	depends on DT_HAS_REALTEK_RTS5918_I3C_ENABLED
+	select I3C_IBI_WORKQUEUE if I3C_USE_IBI
+	select RTK_I3C
+	select RTK_I3C_CTRL
+	select RTK_I3C_TAGT
+	select RTK_I3C_IBI if I3C_USE_IBI
+	default y
+	help
+	  Enable Realtek I3C controller/target driver.
+
+menuconfig RTK_I3C
+	bool "Realtek RTK I3C IP core"
+	depends on I3C_REALTEK
+	help
+	  Vendored RTK I3C IP core. Selected automatically by I3C_REALTEK.
+
+if RTK_I3C
+
+config RTK_I3C_CTRL
+	bool
+
+config RTK_I3C_TAGT
+	bool
+
+config RTK_I3C_IBI
+	bool
+
+config RTK_I3C_DMA
+	bool "Enable RTK I3C DMA handshaking"
+	help
+	  Enable the RTK I3C DMA data path. Leave disabled unless the SoC DMA
+	  integration and DMA shim are available.
+
+config RTK_I3C_CORE_LOG
+	bool "Enable RTK I3C core log"
+	default y
+
+config RTK_I3C_CORE_LOG_LEVEL
+	int "RTK I3C core log level"
+	range 0 5
+	depends on RTK_I3C_CORE_LOG
+	default 3
+	help
+	  0: off, 1: error, 2: warning, 3: info, 4: debug, 5: register.
+
+config RTK_I3C_COSIM
+	bool "Enable RTK I3C co-simulation log"
+
+endif # RTK_I3C

@@ -16,7 +16,7 @@
 #include <string.h>
 #include <sys/types.h>
 
-#ifdef CONFIG_RTS5918_I3C_CTRL
+#ifdef CONFIG_RTK_I3C_CTRL
 #define START_DYN_ADDR 8
 #define I3C_PID_MASK   ((1ULL << 48) - 1)
 
@@ -316,4 +316,4 @@ int rtk_i3c_bus_init_tagt_table(rtk_i3c_ctx *ctx, uint8_t tagt_id, const char *n
 	return 0;
 }
 
-#endif /* CONFIG_RTS5918_I3C_CTRL */
+#endif /* CONFIG_RTK_I3C_CTRL */

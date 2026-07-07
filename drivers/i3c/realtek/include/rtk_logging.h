@@ -17,11 +17,11 @@
 #define RTK_LOG_LEVEL_DEBUG   4
 #define RTK_LOG_LEVEL_REG     5
 
-#ifndef CONFIG_RTS5918_I3C_CORE_LOG_LEVEL
-#define CONFIG_RTS5918_I3C_CORE_LOG_LEVEL RTK_LOG_LEVEL_OFF
+#ifndef CONFIG_RTK_I3C_CORE_LOG_LEVEL
+#define CONFIG_RTK_I3C_CORE_LOG_LEVEL RTK_LOG_LEVEL_OFF
 #endif
 
-#ifdef CONFIG_RTS5918_I3C_COSIM
+#ifdef CONFIG_RTK_I3C_COSIM
 #define LOG_PREFIX "//"
 #define LOG_COSIM(...)                                                                             \
 	do {                                                                                       \
@@ -32,7 +32,7 @@
 #define LOG_COSIM(...)
 #endif
 
-#if CONFIG_RTS5918_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_REG
+#if CONFIG_RTK_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_REG
 #define LOG_REG(fmt, ...)                                                                          \
 	do {                                                                                       \
 		printf(LOG_PREFIX "[REG] [%s]: " fmt, __FUNCTION__, ##__VA_ARGS__);                \
@@ -41,7 +41,7 @@
 #define LOG_REG(fmt, ...)
 #endif
 
-#if CONFIG_RTS5918_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_DEBUG
+#if CONFIG_RTK_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_DEBUG
 #define LOG_DBG(fmt, ...)                                                                          \
 	do {                                                                                       \
 		printf(LOG_PREFIX "[DBG] [%s]: " fmt, __FUNCTION__, ##__VA_ARGS__);                \
@@ -69,7 +69,7 @@
 #define ASSERT(condition)
 #endif
 
-#if CONFIG_RTS5918_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_INFO
+#if CONFIG_RTK_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_INFO
 #define LOG_INF(fmt, ...)                                                                          \
 	do {                                                                                       \
 		printf(LOG_PREFIX "[INF] [%s]: " fmt, __FUNCTION__, ##__VA_ARGS__);                \
@@ -78,7 +78,7 @@
 #define LOG_INF(fmt, ...)
 #endif
 
-#if CONFIG_RTS5918_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_WARNING
+#if CONFIG_RTK_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_WARNING
 #define LOG_WRN(fmt, ...)                                                                          \
 	do {                                                                                       \
 		printf(LOG_PREFIX "[WRN] [%s]: " fmt, __FUNCTION__, ##__VA_ARGS__);                \
@@ -87,7 +87,7 @@
 #define LOG_WRN(fmt, ...)
 #endif
 
-#if CONFIG_RTS5918_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_ERROR
+#if CONFIG_RTK_I3C_CORE_LOG_LEVEL >= RTK_LOG_LEVEL_ERROR
 #define LOG_ERR(fmt, ...)                                                                          \
 	do {                                                                                       \
 		printf(LOG_PREFIX "[ERR] [%s]: " fmt, __FUNCTION__, ##__VA_ARGS__);                \
