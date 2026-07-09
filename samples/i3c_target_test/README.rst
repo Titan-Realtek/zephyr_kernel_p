@@ -28,4 +28,4 @@ Building and Running
 
 Then drive the paired controller from the ``i3c`` shell (write a few bytes,
 read them back) to observe the echo, or use the ``i3c_target`` shell commands
-(``status`` / ``hj`` / ``ibi`` / ``ibi-none`` / ``ibi-big``) on the target side.
+(``status`` / ``hj`` / ``ibi`` / ``ibi_none`` / ``ibi_big``) on the target side.

@@ -30,8 +30,8 @@ that controller node (by PID) so Hot Join / DAA can bind them to a descriptor.
 Shell commands
 **************
 
-* ``i3c_controller ibi-enable``  - arm auto-IBI: (hot-)joined targets get ENEC'd automatically
-* ``i3c_controller ibi-disable`` - disarm auto-IBI and DISEC all targets
+* ``i3c_controller ibi_enable``  - arm auto-IBI: (hot-)joined targets get ENEC'd automatically
+* ``i3c_controller ibi_disable`` - disarm auto-IBI and DISEC all targets
 * ``i3c_controller daa``         - manually run dynamic address assignment
 * ``i3c_controller list``        - list attached I3C devices
 
@@ -40,9 +40,9 @@ Typical flow
 
 The upper layer only arms once; Hot Join then drives the rest automatically:
 
-1. Boot, then run ``i3c_controller ibi-enable`` once to arm.
+1. Boot, then run ``i3c_controller ibi_enable`` once to arm.
 2. Hot-join / power the target. The RTK core auto-accepts the Hot Join and runs
    DAA; a background poll then auto-ENECs the newly addressed, IBI-capable
    target -- no further commands needed.
 3. When the target raises an IBI it is logged as ``IBI from 0x.. : ...``.
-4. ``i3c_controller list`` shows attached devices; ``i3c_controller ibi-disable`` disarms.
+4. ``i3c_controller list`` shows attached devices; ``i3c_controller ibi_disable`` disarms.
