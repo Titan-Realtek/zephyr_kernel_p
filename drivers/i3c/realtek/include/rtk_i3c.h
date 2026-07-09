@@ -387,6 +387,7 @@ typedef struct rtk_i3c_timing_cfg {
 	uint32_t bus_free_ns;
 	uint32_t bus_available_ns;
 	uint32_t bus_idle_ns;
+	uint32_t i3c_od_baud_hz;       /**< OD SCL rate, selects OD high/setup timing. */
 	bool enable_timeout_detection; /**< Enable I3CC BUS timeout function. */
 } rtk_i3c_timing_cfg;
 
@@ -569,5 +570,7 @@ int rtk_i3c_tagt_deinit(rtk_i3c_ctx *ctx);
 #define RTK_I3C_TXFIFO_WILL_FULL STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x0009)
 
 #define RTK_I3C_NOT_ENABLED STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000a)
+
+#define RTK_I3C_TIMEOUT STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000b)
 
 #endif /* RTK_I3C_H_ */

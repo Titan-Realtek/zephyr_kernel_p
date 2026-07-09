@@ -1132,31 +1132,35 @@ static inline void rtk_i3c_core_set_timing(rtk_i3c_core *core, const rtk_i3c_tim
 	sta_to_ns = 0;
 	sda_to_ns = 0;
 	hd_dat_ns = 0;
-#if (RTK_I3C_I3C_OD_BAUD_HZ <= 100000)
-	high_ns = 4000 + 1000;
-	su_sta_ns = 4700;
-	hd_sta_ns = 4000;
-	su_sto_ns = 4000;
-	hd_dat_od_ns = 300 + 0;
-#elif (RTK_I3C_I3C_OD_BAUD_HZ <= 400000)
-	high_ns = 600 + 300;
-	su_sta_ns = 600 + 20;
-	hd_sta_ns = 600 + 20;
-	su_sto_ns = 600 + 20;
-	hd_dat_od_ns = 20 + 6;
-#elif (RTK_I3C_I3C_OD_BAUD_HZ <= 1000000)
-	high_ns = 260 + 120;
-	su_sta_ns = 260 + 160;
-	hd_sta_ns = 260 + 160;
-	su_sto_ns = 260 + 0;
-	hd_dat_od_ns = 0 + 0;
-#else
-	high_ns = 60 + 40;
-	su_sta_ns = 260 + 160;
-	hd_sta_ns = 260 + 160;
-	su_sto_ns = 160 + 20;
-	hd_dat_od_ns = 20 + 0;
-#endif
+	/* OD SCL high / start-stop setup-hold timing follows the runtime OD baud
+	 * (from devicetree) instead of a compile-time bucket, so changing the OD
+	 * rate in the DT keeps the OD duty/timing correct.
+	 */
+	if (cfg->i3c_od_baud_hz <= 100000) {
+		high_ns = 4000 + 1000;
+		su_sta_ns = 4700;
+		hd_sta_ns = 4000;
+		su_sto_ns = 4000;
+		hd_dat_od_ns = 300 + 0;
+	} else if (cfg->i3c_od_baud_hz <= 400000) {
+		high_ns = 600 + 300;
+		su_sta_ns = 600 + 20;
+		hd_sta_ns = 600 + 20;
+		su_sto_ns = 600 + 20;
+		hd_dat_od_ns = 20 + 6;
+	} else if (cfg->i3c_od_baud_hz <= 1000000) {
+		high_ns = 260 + 120;
+		su_sta_ns = 260 + 160;
+		hd_sta_ns = 260 + 160;
+		su_sto_ns = 260 + 0;
+		hd_dat_od_ns = 0 + 0;
+	} else {
+		high_ns = 60 + 40;
+		su_sta_ns = 260 + 160;
+		hd_sta_ns = 260 + 160;
+		su_sto_ns = 160 + 20;
+		hd_dat_od_ns = 20 + 0;
+	}
 #else  /* RTK_I3C_LEGACY_I2C */
 	cas_ns = 39;
 	ds_ns = 0;
@@ -1249,9 +1253,9 @@ static inline void rtk_i3c_core_start_xfer(rtk_i3c_core *core)
 	rtk_core_write32_mask(&core->cstr, 0, 0, 1);
 }
 
-static inline void rtk_i3c_core_wait_byfm_fifo(rtk_i3c_core *core)
+static inline int rtk_i3c_core_wait_byfm_fifo(rtk_i3c_core *core)
 {
-	rtk_core_wait32(&core->csr, 14, 14, 0);
+	return rtk_core_wait32(&core->csr, 14, 14, 0);
 }
 
 static inline uint32_t rtk_i3c_core_get_dsa(rtk_i3c_core *core)
@@ -1289,14 +1293,14 @@ static inline void rtk_i3c_core_write_byfm(rtk_i3c_core *core, uint32_t byfm)
 	rtk_core_write32(core->cfr, byfm);
 }
 
-static inline void rtk_i3c_core_wait_xfer_done(rtk_i3c_core *core)
+static inline int rtk_i3c_core_wait_xfer_done(rtk_i3c_core *core)
 {
-	rtk_core_wait32(&core->cstr, 0, 0, 0);
+	return rtk_core_wait32(&core->cstr, 0, 0, 0);
 }
 
-static inline void rtk_i3c_core_wait_tx_fifo(rtk_i3c_core *core)
+static inline int rtk_i3c_core_wait_tx_fifo(rtk_i3c_core *core)
 {
-	rtk_core_wait32(&core->csr, 8, 8, 1);
+	return rtk_core_wait32(&core->csr, 8, 8, 1);
 }
 
 static inline uint32_t rtk_i3c_core_get_txfl(rtk_i3c_core *core)
@@ -1322,9 +1326,9 @@ static inline void rtk_i3c_core_dma_set_rxftl(rtk_i3c_core *core, uint16_t thres
 }
 #endif /* CONFIG_RTK_I3C_DMA */
 
-static inline void rtk_i3c_core_wait_rx_fifo(rtk_i3c_core *core)
+static inline int rtk_i3c_core_wait_rx_fifo(rtk_i3c_core *core)
 {
-	rtk_core_wait32(&core->csr, 5, 5, 1);
+	return rtk_core_wait32(&core->csr, 5, 5, 1);
 }
 
 static inline void rtk_i3c_core_write_fifo_byte(rtk_i3c_core *core, uint8_t data)
@@ -1356,7 +1360,7 @@ static inline uint16_t rtk_i3c_core_get_rx_fifo_len(rtk_i3c_core *core)
 	return rtk_core_read32_mask(&core->rxfl, 0, 15);
 }
 
-static inline void rtk_i3c_core_wait_rx_fifo_len(rtk_i3c_core *core, uint16_t len)
+static inline int rtk_i3c_core_wait_rx_fifo_len(rtk_i3c_core *core, uint16_t len)
 {
 	return rtk_core_wait32(&core->rxfl, 0, 15, len);
 }

@@ -198,7 +198,7 @@ static inline int rtk_i3c_read_fifo(rtk_i3c_ctx *ctx, rtk_i3c_rx_buffer *buffer,
 
 static int rtk_i3c_write_byfm_and_fifo(rtk_i3c_ctx *ctx, uint32_t byfm, rtk_i3c_msg *msg)
 {
-	rtk_i3c_core_wait_byfm_fifo(ctx->core);
+	RETURN_ERROR_IF(rtk_i3c_core_wait_byfm_fifo(ctx->core) != 0, RTK_I3C_TIMEOUT);
 	rtk_i3c_core_write_byfm(ctx->core, byfm);
 	return rtk_i3c_write_fifo(ctx, msg);
 }
@@ -317,7 +317,10 @@ static int rtk_i3c_write_data_frame(rtk_i3c_ctx *ctx, rtk_i3c_msg msg, bool is_e
 			byfm |= ((is_end_frame) ? BYFM_HAS_STOP : BYFM_NON_STOP);
 		}
 		BIT_FIELD_SET(byfm, BYFM_NDF_OFFSET, BYFM_NDF_HIGH, msg.len);
-		rtk_i3c_core_wait_byfm_fifo(ctx->core);
+		if (rtk_i3c_core_wait_byfm_fifo(ctx->core) != 0) {
+			ret = RTK_I3C_TIMEOUT;
+			goto exit;
+		}
 		rtk_i3c_core_write_byfm(ctx->core, byfm);
 		if (!I3C_MSG_IS_READ(msg.flags)) {
 			if ((ret = rtk_i3c_write_fifo(ctx, &msg)) < 0) {
@@ -402,7 +405,7 @@ static int rtk_i3c_common_init(rtk_i3c_ctx *ctx, rtk_i3c_common_cfg *cfg)
 {
 	ASSERT(ctx != NULL && cfg != NULL);
 
-	RETURN_ERROR_IF(cfg->i3c_freq_hz < 125000000U || cfg->i3c_freq_hz > 400000000U,
+	RETURN_ERROR_IF(cfg->i3c_freq_hz < 100000000U || cfg->i3c_freq_hz > 400000000U,
 			RTK_I3C_INVAL_PARAM);
 
 	memset(ctx, 0, sizeof(rtk_i3c_ctx));
@@ -570,18 +573,20 @@ static void rtk_i3c_init_xfer(struct rtk_i3c_ctx *ctx, int i3c_mode)
  *   2. Send the end‑frame.
  *
  */
-static void rtk_i3c_complete_xfer(struct rtk_i3c_ctx *ctx, int i3c_mode, bool restart)
+static int rtk_i3c_complete_xfer(struct rtk_i3c_ctx *ctx, int i3c_mode, bool restart)
 {
 	if (!restart) {
 		if (i3c_mode == RTK_I3C_HDR_DDR) {
 			rtk_i3c_exit_hdr(ctx);
 		}
 		rtk_i3c_write_end_frame(ctx->core);
-		rtk_i3c_core_wait_xfer_done(ctx->core);
+		return (rtk_i3c_core_wait_xfer_done(ctx->core) != 0) ? RTK_I3C_TIMEOUT : 0;
 	} else if (i3c_mode == RTK_I3C_HDR_DDR) {
 		/* always issue end in HDR-DDR flow */
 		rtk_i3c_write_end_frame(ctx->core);
 	}
+
+	return 0;
 }
 
 /**********************************************************************************************************************
@@ -654,6 +659,7 @@ void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 #endif
 		cfg->common_cfg.timing.bus_idle_ns = 200000;
 		cfg->common_cfg.timing.bus_available_ns = 2000;
+		cfg->common_cfg.timing.i3c_od_baud_hz = RTK_I3C_I3C_OD_BAUD_HZ;
 		cfg->common_cfg.callback = NULL;
 		cfg->common_cfg.ctx = NULL;
 
@@ -841,8 +847,7 @@ int rtk_i3c_do_daa(rtk_i3c_ctx *ctx)
 	}
 
 	rtk_i3c_write_end_frame(ctx->core);
-	rtk_i3c_core_wait_xfer_done(ctx->core);
-	ret = 0;
+	ret = (rtk_i3c_core_wait_xfer_done(ctx->core) != 0) ? RTK_I3C_TIMEOUT : 0;
 
 exit:
 	ctx->state = STATE_CTRL_IDLE;
@@ -909,7 +914,9 @@ int rtk_i3c_do_ccc(rtk_i3c_ctx *ctx, const rtk_i3c_ccc *ccc, uint8_t i3c_mode, b
 	ret = 0;
 
 exit_err:
-	rtk_i3c_complete_xfer(ctx, i3c_mode, restart);
+	if (rtk_i3c_complete_xfer(ctx, i3c_mode, restart) != 0 && ret == 0) {
+		ret = RTK_I3C_TIMEOUT;
+	}
 
 	if (ctx->state == STATE_CTRL_CMD_READ || ctx->state == STATE_CTRL_CMD_WRITE) {
 		ctx->state = STATE_CTRL_IDLE;
@@ -982,8 +989,8 @@ int rtk_i3c_ctrl_xfer(rtk_i3c_ctx *ctx, const rtk_i3c_tagt *tagt, uint8_t i3c_mo
 
 exit:
 	ret = 0;
-	if (do_complete) {
-		rtk_i3c_complete_xfer(ctx, i3c_mode, restart);
+	if (do_complete && rtk_i3c_complete_xfer(ctx, i3c_mode, restart) != 0) {
+		ret = RTK_I3C_TIMEOUT;
 	}
 
 exit_nack:
@@ -1057,10 +1064,19 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 	rtk_i3c_rx_buffer *xfer_buffer = NULL;
 	int ret = 0;
 
+	/* A write (TX preload / read response) may preempt an armed-but-idle RX
+	 * buffer: the target keeps RX armed between transfers, but when the
+	 * application answers a controller read it takes over the bus. Only allowed
+	 * before any write bytes have arrived (count == 0) so an in-progress
+	 * controller write is never clobbered.
+	 */
+	bool tx_preempt_rx = (ctx->state == STATE_TAGT_PRV_READ && !I3C_MSG_IS_READ(msg->flags) &&
+			      ctx->rx_buffer.msg.count == 0U);
+
 	if (ctx->state == STATE_TAGT_PRV_WRITE && ctx->tx_buffer.msg.data == msg->data &&
 	    ctx->tx_buffer.msg.flags == msg->flags && ctx->tx_buffer.msg.len == msg->len) {
 		xfer_buffer = (rtk_i3c_rx_buffer *)&ctx->tx_buffer;
-	} else if (ctx->state != STATE_TAGT_IDLE) {
+	} else if (ctx->state != STATE_TAGT_IDLE && !tx_preempt_rx) {
 		return RTK_I3C_BUSY;
 	}
 
@@ -1078,9 +1094,9 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 		if ((ret = rtk_i3c_write_fifo(ctx, &xfer_buffer->msg)) < 0) {
 			goto exit;
 		}
-		if (!I3C_MSG_IS_DMA(xfer_buffer->msg.flags)) {
-			ctx->state = STATE_TAGT_IDLE;
-		}
+		/* Keep STATE_TAGT_PRV_WRITE so the controller read that drains the
+		 * preloaded FIFO is recognized as a write completion in the DONE ISR.
+		 */
 	}
 
 	ret = 0;
@@ -1109,7 +1125,12 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 	int ret = 0;
 
 	RETURN_ERROR_IF(I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role), RTK_I3C_NOT_SUPPORTED);
-	RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE, RTK_I3C_BUSY);
+	/* A target that keeps RX armed between transfers sits in STATE_TAGT_PRV_READ.
+	 * Allow an IBI/HJ/CR to preempt that idle arm (no write bytes received yet),
+	 * the same way a TX read-response can; the RX arm is restored afterwards.
+	 */
+	bool ibi_preempt_rx = (ctx->state == STATE_TAGT_PRV_READ && ctx->rx_buffer.msg.count == 0U);
+	RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE && !ibi_preempt_rx, RTK_I3C_BUSY);
 	bool invalid_payload = (ctx->cfg->tagt_info.char_info.bcr & I3C_BCR_IBI_PAYLOAD)
 				       ? (msg == NULL || msg->len == 0)
 				       : (msg != NULL && msg->len > 0);
@@ -1237,6 +1258,15 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 		args.count = ctx->ibi_buffer.msg.count;
 		args.len = ctx->ibi_buffer.msg.len;
 		ctx->ibi_buffer = (rtk_i3c_rx_buffer){0};
+	} else if (ctx->state == STATE_TAGT_PRV_READ) {
+		/* Target received a private write from the controller. Complete on
+		 * STOP/DONE since the controller may write fewer bytes than the
+		 * prepared RX buffer length.
+		 */
+		args.event = RTK_I3C_EVENT_READ_COMPLETE;
+		args.count = ctx->rx_buffer.msg.count;
+		args.len = ctx->rx_buffer.msg.len;
+		ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
 #endif /* CONFIG_RTK_I3C_TAGT */
 	} else if (I3C_STATE_IS_WRITE(ctx->state) && !I3C_MSG_IS_DMA(ctx->tx_buffer.msg.flags) &&
 		   ctx->tx_buffer.msg.count == ctx->tx_buffer.msg.len) {
@@ -1251,8 +1281,22 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 		return;
 	}
 
-	ctx->state =
-		(!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) ? STATE_TAGT_IDLE : STATE_CTRL_IDLE;
+	if (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) {
+#ifdef CONFIG_RTK_I3C_TAGT
+		if (args.event == RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_COMPLETE &&
+		    ctx->rx_buffer.msg.data != NULL && ctx->rx_buffer.msg.len != 0) {
+			/* Keep a previously armed target RX buffer valid across
+			 * ENTDAA/SETNEWDA. The echo app may arm RX before the
+			 * controller assigns a dynamic address.
+			 */
+			ctx->state = STATE_TAGT_PRV_READ;
+		} else {
+			ctx->state = STATE_TAGT_IDLE;
+		}
+#endif /* CONFIG_RTK_I3C_TAGT */
+	} else {
+		ctx->state = STATE_CTRL_IDLE;
+	}
 	if (ctx->cfg->common_cfg.callback != NULL) {
 		ctx->cfg->common_cfg.callback(&args);
 	}
@@ -1273,6 +1317,16 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	if ((read_len = rtk_i3c_core_get_rx_fifo_len(ctx->core)) == 0) {
 		return;
 	}
+
+#ifdef CONFIG_RTK_I3C_TAGT
+	if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
+	    ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
+		LOG_WRN("Target RXNE ignored: state=%d rxfl=%u", ctx->state, read_len);
+		rtk_i3c_core_flush_rx(ctx->core);
+		return;
+	}
+#endif /* CONFIG_RTK_I3C_TAGT */
+
 #ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(ctx->rx_buffer.msg.flags)) {
 		read_len = ctx->rx_buffer.msg.len;
@@ -1300,8 +1354,12 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	};
 
 	args.len = ctx->rx_buffer.msg.len;
-	if (ctx->rx_buffer.msg.len != 0 && ctx->rx_buffer.msg.count != 0) {
-		/* Normal read transfer done */
+	if (ctx->rx_buffer.msg.len != 0 && ctx->rx_buffer.msg.count != 0 &&
+	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state == STATE_TAGT_PRV_READ)) {
+		/* Controller read transfers complete when the requested data is
+		 * received. Target private writes complete on STOP/DONE because the
+		 * controller may write fewer bytes than the prepared RX buffer length.
+		 */
 		args.count = ctx->rx_buffer.msg.count;
 		args.event = RTK_I3C_EVENT_READ_COMPLETE;
 		if (ctx->cfg->common_cfg.callback != NULL) {
@@ -1310,7 +1368,8 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	}
 
 exit:
-	if (ctx->rx_buffer.msg.count == ctx->rx_buffer.msg.len) {
+	if (ctx->rx_buffer.msg.count == ctx->rx_buffer.msg.len &&
+	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state == STATE_TAGT_PRV_READ)) {
 		ctx->state = (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) ? STATE_TAGT_IDLE
 									    : STATE_CTRL_IDLE;
 		ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
@@ -1327,6 +1386,34 @@ exit:
 static __always_inline void rtk_i3c_rxnak_isr(rtk_i3c_ctx *ctx)
 {
 	LOG_DBG("\n");
+
+	if (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) {
+		if (ctx->state == STATE_TAGT_IBI) {
+			/* The target's IBI/HJ/CR address was NACKed (rejected) by the
+			 * controller. Discard the partially-queued IBI frame (BYFM) and
+			 * payload (TXDA) so a retry starts from a clean FIFO instead of
+			 * appending to stale bytes, return the engine to idle, and report
+			 * it as an accept failure so the caller can retry.
+			 */
+			rtk_i3c_core_flush_byfm(ctx->core);
+			rtk_i3c_core_flush_tx(ctx->core);
+			ctx->state = STATE_TAGT_IDLE;
+			rtk_i3c_callback_args args = {
+				.ctx = ctx->cfg->common_cfg.ctx,
+				.event = RTK_I3C_EVENT_ARBITRATE_FAIL,
+			};
+			if (ctx->cfg->common_cfg.callback != NULL) {
+				ctx->cfg->common_cfg.callback(&args);
+			}
+			return;
+		}
+		/* Otherwise this is a normal host-read NACK ending a read; ignore it
+		 * (target transfer completion is handled by DONE) and do not force the
+		 * target into the controller idle state.
+		 */
+		return;
+	}
+
 	// clear state
 	ctx->state = STATE_CTRL_IDLE;
 	rtk_i3c_callback_args args = {
@@ -1464,7 +1551,12 @@ static __always_inline void rtk_i3c_daf_isr(rtk_i3c_ctx *ctx)
 {
 	LOG_DBG("\n");
 
-	/* For Target: DAF means arbitration lost during IBI transmission */
+	/* For Target: DAF means arbitration lost during IBI transmission.
+	 * Discard the partially-queued IBI frame (BYFM) and payload (TXDA) so a
+	 * retry starts from a clean FIFO instead of appending to stale bytes.
+	 */
+	rtk_i3c_core_flush_byfm(ctx->core);
+	rtk_i3c_core_flush_tx(ctx->core);
 	ctx->state = STATE_TAGT_IDLE;
 
 	rtk_i3c_callback_args args = {

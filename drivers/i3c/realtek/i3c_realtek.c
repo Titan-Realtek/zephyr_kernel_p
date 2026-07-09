@@ -27,9 +27,25 @@
 
 LOG_MODULE_REGISTER(i3c_realtek, CONFIG_I3C_REALTEK_LOG_LEVEL);
 
-#define I3C_REALTEK_ADDR_SLOT_BITS  32U
-#define I3C_REALTEK_ADDR_SLOT_WORDS ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_ADDR_SLOT_BITS)
-#define I3C_REALTEK_MAX_DEVS        RTK_I3C_MAX_TAGT_COUNT
+#define I3C_REALTEK_ADDR_SLOT_BITS    32U
+#define I3C_REALTEK_ADDR_SLOT_WORDS   ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_ADDR_SLOT_BITS)
+#define I3C_REALTEK_MAX_DEVS          RTK_I3C_MAX_TAGT_COUNT
+/* Internal RX staging buffer for controller-initiated writes to this target.
+ * Sized to cover the largest validated private/legacy transfer (256 bytes).
+ */
+#define I3C_REALTEK_RX_BUF_SIZE       256U
+#define I3C_REALTEK_IBI_TIMEOUT       K_MSEC(100)
+/* When a target-raised IBI/HJ is rejected (NACKed) or loses arbitration, retry
+ * a few times with a short backoff before giving up. Rejection is transient
+ * (the controller may be busy), unlike a timeout (no active controller).
+ *
+ * Hot Join gets its own, more persistent policy: joining the bus matters more,
+ * and I3C requires a longer wait after a rejected hot join before retrying.
+ */
+#define I3C_REALTEK_IBI_RETRY_MAX     3
+#define I3C_REALTEK_IBI_RETRY_BACKOFF K_MSEC(1)
+#define I3C_REALTEK_HJ_RETRY_MAX      5
+#define I3C_REALTEK_HJ_RETRY_BACKOFF  K_MSEC(10)
 
 struct i3c_realtek_config {
 	struct i3c_driver_config common;
@@ -56,12 +72,22 @@ struct i3c_realtek_data {
 	struct k_mutex bus_lock;
 	struct k_sem ccc_end;
 	struct k_sem xfer_end;
+	struct k_sem ibi_sem;
+	int ibi_status;  /* result of the in-flight IBI/HJ/CR, read after ibi_sem */
+	bool hj_pending; /* a hot-join raise is waiting; DAA completion means success */
 	uint32_t num_xfer;
 	rtk_i3c_ctx rtk_ctx;
 	rtk_i3c_cfg rtk_cfg;
 	rtk_i3c_bus_tagt_item tagt_table[I3C_REALTEK_MAX_DEVS];
 	uint32_t addr_slots[I3C_REALTEK_ADDR_SLOT_WORDS];
 	struct i3c_target_config *target_config;
+	uint8_t rx_buf[I3C_REALTEK_RX_BUF_SIZE];
+#ifdef CONFIG_I3C_USE_IBI
+	/* Controller-side staging buffer for IBI payloads received from targets
+	 * (byte 0 is the MDB). Re-armed after each delivered IBI.
+	 */
+	uint8_t ibi_rx_buf[CONFIG_I3C_IBI_MAX_PAYLOAD_SIZE];
+#endif
 };
 
 static const struct device *i3c_realtek_devices[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
@@ -84,6 +110,8 @@ static int i3c_realtek_err_to_errno(int ret)
 	case RTK_I3C_TXFIFO_WILL_FULL:
 	case RTK_I3C_READ_BUFFER_FULL:
 		return -ENOSPC;
+	case RTK_I3C_TIMEOUT:
+		return -ETIMEDOUT;
 	default:
 		return -EIO;
 	}
@@ -250,6 +278,68 @@ static void i3c_realtek_handle_daa_phase(const struct device *dev,
 	}
 }
 
+/*
+ * Arm the target RX path with a fresh staging buffer. Routed through
+ * rtk_i3c_tagt_xfer() so the core enters STATE_TAGT_PRV_READ: the core's
+ * target RXNE handler flushes incoming bytes unless it is in that state, so a
+ * plain buffer-descriptor update is not enough. Must be called while the core
+ * is idle (at configure time, or after a completed transfer).
+ */
+static void i3c_realtek_arm_rx(struct i3c_realtek_data *data)
+{
+	rtk_i3c_msg msg = {
+		.data = data->rx_buf,
+		.len = sizeof(data->rx_buf),
+		.count = 0U,
+		.flags = RTK_I3C_READ,
+	};
+	unsigned int key;
+
+	/* rtk_i3c_tagt_xfer() mutates the shared core state/buffer. Guard against
+	 * the completion ISR (which also arms RX) interleaving with a thread-context
+	 * arm; a plain mutex would not lock out the ISR. Harmless (nested) when this
+	 * is already called from ISR context.
+	 */
+	key = irq_lock();
+	(void)rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg);
+	irq_unlock(key);
+}
+
+/*
+ * Hand the core a fresh buffer mid-transfer, in response to READ_BUFFER_FULL.
+ * The core is still receiving (STATE_TAGT_PRV_READ) and preserves the running
+ * byte count across this callback, so only the buffer descriptor is refreshed.
+ */
+static void i3c_realtek_refill_rx(struct i3c_realtek_data *data)
+{
+	data->rtk_ctx.rx_buffer.msg.data = data->rx_buf;
+	data->rtk_ctx.rx_buffer.msg.len = sizeof(data->rx_buf);
+	data->rtk_ctx.rx_buffer.msg.flags = RTK_I3C_READ;
+	data->rtk_ctx.rx_buffer.buffer_requested = false;
+}
+
+#ifdef CONFIG_I3C_USE_IBI
+/*
+ * Controller side: arm the IBI receive buffer so a target-raised IBI's payload
+ * can be captured. Re-armed after each IBI is delivered. irq_lock guards the
+ * shared core state against the completion ISR (see i3c_realtek_arm_rx).
+ */
+static void i3c_realtek_arm_ibi_rx(struct i3c_realtek_data *data)
+{
+	rtk_i3c_msg msg = {
+		.data = data->ibi_rx_buf,
+		.len = sizeof(data->ibi_rx_buf),
+		.count = 0U,
+		.flags = RTK_I3C_READ,
+	};
+	unsigned int key;
+
+	key = irq_lock();
+	(void)rtk_i3c_ibi_read(&data->rtk_ctx, &msg);
+	irq_unlock(key);
+}
+#endif /* CONFIG_I3C_USE_IBI */
+
 static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 {
 	const struct device *dev = (const struct device *)args->ctx;
@@ -263,9 +353,50 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 	case RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_COMPLETE:
 		if (((const struct i3c_realtek_config *)dev->config)->role == RTK_I3C_TAGT) {
 			data->rtk_cfg.tagt_info.dyn_addr = args->dyn_addr;
+			/* Let a registered target app observe its assigned address. */
+			if (data->target_config != NULL) {
+				data->target_config->address = args->dyn_addr;
+			}
+			/* A hot join that is accepted flows straight into ENTDAA, so the
+			 * controller assigns an address instead of ending with a plain
+			 * IBI_WRITE_COMPLETE. Treat DAA completion as the hot-join success
+			 * signal for a waiting ibi_raise().
+			 */
+			if (data->hj_pending) {
+				data->ibi_status = 0;
+				k_sem_give(&data->ibi_sem);
+			}
 		}
 		break;
+	case RTK_I3C_EVENT_READ_BUFFER_FULL:
+		/* Core needs (more) RX space mid-transfer: refresh the buffer. */
+		i3c_realtek_refill_rx(data);
+		break;
 	case RTK_I3C_EVENT_READ_COMPLETE:
+		data->num_xfer = args->count;
+		/* Target role: deliver the bytes written to us by the controller.
+		 * Controllers do their own read into the caller's buffer and have
+		 * no registered target_config, so this block is skipped for them.
+		 */
+		if (data->target_config != NULL && data->target_config->callbacks != NULL) {
+			target_cb = data->target_config->callbacks;
+			if (target_cb->write_received_cb != NULL) {
+				for (uint32_t i = 0; i < args->count; i++) {
+					target_cb->write_received_cb(data->target_config,
+								     data->rx_buf[i]);
+				}
+			}
+			if (target_cb->stop_cb != NULL) {
+				target_cb->stop_cb(data->target_config);
+			}
+			/* Re-arm RX so back-to-back controller writes are captured. If
+			 * the app instead answers with a read (i3c_target_tx_write), that
+			 * preloaded write preempts this idle RX arm in rtk_i3c_tagt_xfer().
+			 */
+			i3c_realtek_arm_rx(data);
+		}
+		k_sem_give(&data->xfer_end);
+		break;
 	case RTK_I3C_EVENT_WRITE_COMPLETE:
 		data->num_xfer = args->count;
 		k_sem_give(&data->xfer_end);
@@ -274,6 +405,8 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			if (target_cb->stop_cb != NULL) {
 				target_cb->stop_cb(data->target_config);
 			}
+			/* Read-back done; re-arm RX for the next controller write. */
+			i3c_realtek_arm_rx(data);
 		}
 		break;
 	case RTK_I3C_EVENT_COMMAND_COMPLETE:
@@ -281,9 +414,45 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		k_sem_give(&data->ccc_end);
 		break;
 	case RTK_I3C_EVENT_IBI_WRITE_COMPLETE:
-	case RTK_I3C_EVENT_IBI_READ_COMPLETE:
+		/* Target-raised IBI/HJ/CR was accepted by the controller. The IBI
+		 * preempted the resting RX arm, so restore it for controller writes.
+		 */
 		data->num_xfer = args->count;
+		data->ibi_status = 0;
+		if (data->target_config != NULL) {
+			i3c_realtek_arm_rx(data);
+		}
+		k_sem_give(&data->ibi_sem);
+		break;
+	case RTK_I3C_EVENT_IBI_READ_COMPLETE:
+		/* Controller received an IBI from a target. */
+		data->num_xfer = args->count;
+#if defined(CONFIG_I3C_USE_IBI) && defined(CONFIG_I3C_IBI_WORKQUEUE)
+		if (args->ibi_type == RTK_I3C_IBI_INTR) {
+			struct i3c_device_desc *ibi_target = i3c_dev_list_i3c_addr_find(
+				&data->common.attached_dev, args->ibi_addr);
+
+			if (ibi_target != NULL && ibi_target->ibi_cb != NULL) {
+				/* Payload includes the MDB as byte 0. */
+				(void)i3c_ibi_work_enqueue_target_irq(ibi_target, data->ibi_rx_buf,
+								      args->count);
+			}
+			/* Re-arm the staging buffer for the next IBI. */
+			i3c_realtek_arm_ibi_rx(data);
+		}
+#endif
 		k_sem_give(&data->xfer_end);
+		break;
+	case RTK_I3C_EVENT_ARBITRATE_FAIL:
+		/* Target lost arbitration during an IBI/HJ/CR; the core already reset
+		 * to idle. Wake the (synchronous) ibi_raise waiter so it fails fast
+		 * instead of waiting out the timeout, and restore the resting RX arm.
+		 */
+		data->ibi_status = -EAGAIN;
+		if (data->target_config != NULL) {
+			i3c_realtek_arm_rx(data);
+		}
+		k_sem_give(&data->ibi_sem);
 		break;
 	default:
 		break;
@@ -318,6 +487,8 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 		data->rtk_cfg.bitrate_cfg.i3c_pp_baud_hz =
 			ctrl_cfg->scl.i3c ? ctrl_cfg->scl.i3c : RTK_I3C_I3C_PP_BAUD_HZ;
 		data->rtk_cfg.bitrate_cfg.i3c_od_baud_hz = config->i3c_od_scl_hz;
+		/* Keep OD high/setup-hold timing in sync with the OD SCL rate. */
+		data->rtk_cfg.common_cfg.timing.i3c_od_baud_hz = config->i3c_od_scl_hz;
 		data->rtk_cfg.bitrate_cfg.i2c_baud_hz =
 			ctrl_cfg->scl.i2c ? ctrl_cfg->scl.i2c : RTK_I3C_I2C_BAUD_HZ;
 		ret = i3c_realtek_err_to_errno(rtk_i3c_ctrl_init(&data->rtk_ctx, &data->rtk_cfg));
@@ -339,6 +510,10 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 		data->rtk_cfg.tagt_info.resp_info.max_write_len = target_cfg->max_write_len;
 		data->rtk_cfg.tagt_info.resp_info.hdr_mode = target_cfg->supported_hdr;
 		ret = i3c_realtek_err_to_errno(rtk_i3c_tagt_init(&data->rtk_ctx, &data->rtk_cfg));
+		if (ret == 0) {
+			/* tagt_init zeroes the context, so arm RX afterwards. */
+			i3c_realtek_arm_rx(data);
+		}
 		break;
 	default:
 		ret = -ENOTSUP;
@@ -501,43 +676,165 @@ static struct i3c_device_desc *i3c_realtek_device_find(const struct device *dev,
 	return i3c_dev_list_find(&config->common.dev_list, id);
 }
 
+#ifdef CONFIG_I3C_USE_IBI
+/*
+ * Issue one IBI/HJ/CR attempt and wait for its outcome. Returns 0 when accepted,
+ * -EAGAIN when rejected (NACKed) or arbitration was lost (retryable), -ETIMEDOUT
+ * when nothing responded, or a negative errno from the core. Caller holds bus_lock.
+ */
+static int i3c_realtek_ibi_raise_once(struct i3c_realtek_data *data, rtk_i3c_ibi_type ibi_type,
+				      rtk_i3c_msg *msg_ptr)
+{
+	unsigned int key;
+	int ret;
+
+	k_sem_reset(&data->ibi_sem);
+	/* Atomic vs the completion ISR that arms RX (see i3c_realtek_arm_rx). Only
+	 * the state-mutating ibi_write is guarded; the wait below must not run with
+	 * interrupts locked.
+	 */
+	key = irq_lock();
+	ret = i3c_realtek_err_to_errno(rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr));
+	irq_unlock(key);
+	if (ret != 0) {
+		return ret;
+	}
+
+	/* Wait for the outcome: RTK_I3C_EVENT_IBI_WRITE_COMPLETE (accepted, ibi_status
+	 * 0) or RTK_I3C_EVENT_ARBITRATE_FAIL (rejected/lost arbitration, ibi_status
+	 * -EAGAIN). A timeout means neither fired, e.g. no active controller.
+	 */
+	if (k_sem_take(&data->ibi_sem, I3C_REALTEK_IBI_TIMEOUT) != 0) {
+		return -ETIMEDOUT;
+	}
+
+	return data->ibi_status;
+}
+
 static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *request)
 {
 	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_msg msg = {0};
 	rtk_i3c_msg *msg_ptr = NULL;
-	rtk_i3c_ibi_type ibi_type = RTK_I3C_IBI_INTR;
+	rtk_i3c_ibi_type ibi_type;
 	int ret;
 
-	if (request != NULL) {
-		switch (request->ibi_type) {
-		case I3C_IBI_TARGET_INTR:
-			ibi_type = RTK_I3C_IBI_INTR;
-			break;
-		case I3C_IBI_CONTROLLER_ROLE_REQUEST:
-			ibi_type = RTK_I3C_IBI_CTRL_REQ;
-			break;
-		case I3C_IBI_HOTJOIN:
-			ibi_type = RTK_I3C_IBI_HOT_JOIN;
-			break;
-		default:
-			return -EINVAL;
-		}
-
-		if (request->payload_len != 0U) {
-			msg.data = request->payload;
-			msg.len = request->payload_len;
-			msg.flags = RTK_I3C_WRITE;
-			msg_ptr = &msg;
-		}
+	if (request == NULL) {
+		return -EINVAL;
 	}
 
+	switch (request->ibi_type) {
+	case I3C_IBI_TARGET_INTR:
+		ibi_type = RTK_I3C_IBI_INTR;
+		break;
+	case I3C_IBI_CONTROLLER_ROLE_REQUEST:
+		ibi_type = RTK_I3C_IBI_CTRL_REQ;
+		break;
+	case I3C_IBI_HOTJOIN:
+		ibi_type = RTK_I3C_IBI_HOT_JOIN;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* INTR and controller-role-request need an assigned dynamic address;
+	 * hot-join is raised precisely because there is none yet.
+	 */
+	if (ibi_type != RTK_I3C_IBI_HOT_JOIN && data->rtk_cfg.tagt_info.dyn_addr == 0U) {
+		return -EINVAL;
+	}
+
+	if (request->payload_len != 0U) {
+		msg.data = request->payload;
+		msg.len = request->payload_len;
+		msg.flags = RTK_I3C_WRITE;
+		msg_ptr = &msg;
+	}
+
+	/* Hot Join uses a more persistent retry policy than a regular IBI. */
+	bool is_hj = (ibi_type == RTK_I3C_IBI_HOT_JOIN);
+	int retry_max = is_hj ? I3C_REALTEK_HJ_RETRY_MAX : I3C_REALTEK_IBI_RETRY_MAX;
+	k_timeout_t backoff = is_hj ? I3C_REALTEK_HJ_RETRY_BACKOFF : I3C_REALTEK_IBI_RETRY_BACKOFF;
+
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
-	ret = i3c_realtek_err_to_errno(rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr));
+
+	/* For hot join, an accepted request is signalled by DAA completion rather
+	 * than IBI_WRITE_COMPLETE (see the ADDRESS_ASSIGNMENT_COMPLETE handler).
+	 */
+	data->hj_pending = is_hj;
+
+	for (int attempt = 0;; attempt++) {
+		ret = i3c_realtek_ibi_raise_once(data, ibi_type, msg_ptr);
+		/* Retry only on transient rejection / lost arbitration, not on a
+		 * timeout (no active controller) or a parameter/state error.
+		 */
+		if (ret != -EAGAIN || attempt >= retry_max) {
+			break;
+		}
+		k_sleep(backoff);
+	}
+
+	data->hj_pending = false;
+
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret;
 }
+
+/*
+ * Controller side: enable receiving IBI from a target. Arms the local IBI RX
+ * buffer, then tells the target to enable IBI generation via ENEC.
+ */
+static int i3c_realtek_ibi_enable(const struct device *dev, struct i3c_device_desc *target)
+{
+	struct i3c_realtek_data *data = dev->data;
+	struct i3c_ccc_events events;
+	int ret;
+
+	if (target == NULL || !i3c_device_is_ibi_capable(target)) {
+		return -EINVAL;
+	}
+	if (target->dynamic_addr == 0U) {
+		return -EINVAL;
+	}
+
+	/* Arm the RX buffer before enabling IBI at the target so the payload of an
+	 * IBI that arrives immediately after ENEC is captured. arm_ibi_rx locks
+	 * interrupts internally; the ENEC transfer below must not be under bus_lock
+	 * here because i3c_ccc_do_events_set() takes bus_lock itself.
+	 */
+	i3c_realtek_arm_ibi_rx(data);
+
+	events.events = I3C_CCC_EVT_INTR;
+	ret = i3c_ccc_do_events_set(target, true, &events);
+	if (ret != 0) {
+		LOG_ERR("%s: ENEC(INTR) for 0x%02x failed (%d)", dev->name, target->dynamic_addr,
+			ret);
+	}
+
+	return ret;
+}
+
+/* Controller side: disable receiving IBI from a target via DISEC. */
+static int i3c_realtek_ibi_disable(const struct device *dev, struct i3c_device_desc *target)
+{
+	struct i3c_ccc_events events;
+	int ret;
+
+	if (target == NULL || target->dynamic_addr == 0U) {
+		return -EINVAL;
+	}
+
+	events.events = I3C_CCC_EVT_INTR;
+	ret = i3c_ccc_do_events_set(target, false, &events);
+	if (ret != 0) {
+		LOG_ERR("%s: DISEC(INTR) for 0x%02x failed (%d)", dev->name, target->dynamic_addr,
+			ret);
+	}
+
+	return ret;
+}
+#endif /* CONFIG_I3C_USE_IBI */
 
 static int i3c_realtek_target_register(const struct device *dev, struct i3c_target_config *cfg)
 {
@@ -573,13 +870,17 @@ static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, u
 		.flags = RTK_I3C_WRITE,
 	};
 	int ret;
+	unsigned int key;
 
 	if (buf == NULL || len == 0U) {
 		return -EINVAL;
 	}
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
+	/* Atomic vs the completion ISR that arms RX (see i3c_realtek_arm_rx). */
+	key = irq_lock();
 	ret = i3c_realtek_err_to_errno(rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg));
+	irq_unlock(key);
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret == 0 ? (int)msg.count : ret;
@@ -594,6 +895,7 @@ static int i3c_realtek_init(const struct device *dev)
 	k_mutex_init(&data->bus_lock);
 	k_sem_init(&data->ccc_end, 0, 1);
 	k_sem_init(&data->xfer_end, 0, 1);
+	k_sem_init(&data->ibi_sem, 0, 1);
 
 	i3c_realtek_devices[config->instance_id] = dev;
 
@@ -675,7 +977,11 @@ static const struct i3c_driver_api i3c_realtek_api = {
 	.do_ccc = i3c_realtek_do_ccc,
 	.i3c_xfers = i3c_realtek_i3c_xfers,
 	.i3c_device_find = i3c_realtek_device_find,
+#ifdef CONFIG_I3C_USE_IBI
+	.ibi_enable = i3c_realtek_ibi_enable,
+	.ibi_disable = i3c_realtek_ibi_disable,
 	.ibi_raise = i3c_realtek_ibi_raise,
+#endif
 	.target_register = i3c_realtek_target_register,
 	.target_unregister = i3c_realtek_target_unregister,
 	.target_tx_write = i3c_realtek_target_tx_write,

@@ -58,13 +58,30 @@ static inline uint32_t rtk_core_read32_mask(volatile void *addr, uint8_t bit_low
 	return BIT_FIELD_GET((*(volatile uint32_t *)addr), bit_low, bit_high);
 }
 
-static inline void rtk_core_wait32(volatile void *addr, uint8_t bit_low, uint8_t bit_high,
-				   uint32_t expected)
+/* Upper bound on the busy-wait spins. Large enough for any legitimate I3C
+ * transaction to complete, small enough not to lock the CPU forever if the
+ * bus stalls (e.g. a target never ACKs).
+ */
+#ifndef RTK_CORE_WAIT_MAX_LOOPS
+#define RTK_CORE_WAIT_MAX_LOOPS 1000000U
+#endif
+
+/* Poll @p addr's [bit_low:bit_high] field until it equals @p expected.
+ * Returns 0 on success, -1 if it did not settle within RTK_CORE_WAIT_MAX_LOOPS.
+ */
+static inline int rtk_core_wait32(volatile void *addr, uint8_t bit_low, uint8_t bit_high,
+				  uint32_t expected)
 {
-	while (BIT_FIELD_GET(*(volatile uint32_t *)addr, bit_low, bit_high) != expected)
-		;
+	uint32_t loops = RTK_CORE_WAIT_MAX_LOOPS;
+
+	while (BIT_FIELD_GET(*(volatile uint32_t *)addr, bit_low, bit_high) != expected) {
+		if (--loops == 0U) {
+			return -1;
+		}
+	}
 	LOG_COSIM("config_wait (32'h%08" PRIx32 ", %d, %d , 32'h%08" PRIx32 ");\n", (uint32_t)addr,
 		  bit_low, bit_high - bit_low + 1, expected);
+	return 0;
 }
 
 #endif
