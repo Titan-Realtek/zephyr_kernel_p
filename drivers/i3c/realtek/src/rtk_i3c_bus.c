@@ -304,7 +304,13 @@ int rtk_i3c_bus_init_tagt_table(rtk_i3c_ctx *ctx, uint8_t tagt_id, const char *n
 		tagt_table[tagt_id].info.is_i2c = 1;
 	}
 
-	if (stc_addr <= RTK_I3C_MAX_DYN_ADDR) {
+	/*
+	 * Skip when stc_addr == dyn_addr: the slot was just marked above as
+	 * dyn_addr, so re-checking it would spuriously report the device's own
+	 * address as occupied. This is the SETDASA case (init dynamic address
+	 * assigned via the static address), where the two are intentionally equal.
+	 */
+	if (stc_addr <= RTK_I3C_MAX_DYN_ADDR && stc_addr != dyn_addr) {
 		if (rtk_i3c_bus_is_addr_slot_occupied(ctx, stc_addr)) {
 			LOG_ERR("addr: 0x%02x is occupied!\n", stc_addr);
 			return RTK_I3C_ADDR_OCCUPIED;

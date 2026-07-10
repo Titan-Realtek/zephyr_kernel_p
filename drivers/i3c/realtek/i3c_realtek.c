@@ -931,11 +931,6 @@ static int i3c_realtek_init(const struct device *dev)
 	config->irq_config_func(dev);
 
 	if (config->role == RTK_I3C_CTRL_PRIM) {
-		ret = i3c_realtek_address_slots_init(dev);
-		if (ret != 0) {
-			return ret;
-		}
-
 		data->common.ctrl_config.scl.i3c = data->common.ctrl_config.scl.i3c
 							   ? data->common.ctrl_config.scl.i3c
 							   : RTK_I3C_I3C_PP_BAUD_HZ;
@@ -944,6 +939,11 @@ static int i3c_realtek_init(const struct device *dev)
 							   : RTK_I3C_I2C_BAUD_HZ;
 
 		ret = i3c_configure(dev, I3C_CONFIG_CONTROLLER, &data->common.ctrl_config);
+		if (ret != 0) {
+			return ret;
+		}
+
+		ret = i3c_realtek_address_slots_init(dev);
 		if (ret != 0) {
 			return ret;
 		}
