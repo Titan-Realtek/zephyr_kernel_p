@@ -26,10 +26,10 @@ bool z_arm_on_enter_cpu_idle(void)
  *
  * This needs to be run from the very beginning.
  */
-void soc_early_init_hook(void)
+int soc_early_init_hook(void)
 {
 	if (!IS_ENABLED(CONFIG_RTS5918_DEBUG_SWJ)) {
-		return;
+		return -ENOTSUP;
 	}
 
 	int ret;
@@ -39,6 +39,8 @@ void soc_early_init_hook(void)
 	if (ret < 0) {
 		LOG_ERR("SWJ init failed");
 	}
+
+	return ret;
 }
 SYS_INIT(soc_early_init_hook, PRE_KERNEL_1, 0);
 
@@ -52,5 +54,7 @@ static int soc_disable_vout_130(void)
 	*(uint32_t *)0x402214C0 = 0x00001680;	// address
 	*(uint32_t *)0x402214C4 = 0x00000001;	// enable
 	*(uint32_t *)0x40100170 |= (0x1 << 1);
+
+	return 0;
 }
 SYS_INIT(soc_disable_vout_130, PRE_KERNEL_2, 5);
