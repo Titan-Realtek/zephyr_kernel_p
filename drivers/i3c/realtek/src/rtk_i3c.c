@@ -623,6 +623,32 @@ int rtk_i3c_ctrl_deinit(rtk_i3c_ctx *ctx)
 	return 0;
 }
 
+void rtk_i3c_set_hj_accept(rtk_i3c_ctx *ctx, bool enable)
+{
+	rtk_i3c_core_set_hj_accept(ctx->core, enable);
+}
+
+int rtk_i3c_ctrl_recover(rtk_i3c_ctx *ctx)
+{
+	ASSERT(ctx != NULL);
+	RETURN_ERROR_IF(ctx->cfg == NULL, RTK_I3C_NOT_ENABLED);
+
+	/* Drop any in-flight transfer: flush BYFM/TX/RX FIFOs, clear all pending
+	 * interrupts, and reset the software transfer state back to controller
+	 * idle so a wedged bus can accept new transfers.
+	 */
+	rtk_i3c_core_flush_all(ctx->core);
+	rtk_i3c_core_clear_isr(ctx->core, 0xFFFFFFFFU);
+
+	ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
+	ctx->tx_buffer = (rtk_i3c_tx_buffer){0};
+	ctx->ibi_buffer = (rtk_i3c_rx_buffer){0};
+	ctx->ccc_id = I3C_CCC_INVALID_ID;
+	ctx->state = STATE_CTRL_IDLE;
+
+	return 0;
+}
+
 void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 {
 	ASSERT(cfg != NULL);
@@ -803,8 +829,12 @@ int rtk_i3c_do_daa(rtk_i3c_ctx *ctx)
 
 		/* Check if DAA is complete (RXNAK) */
 		if (rtk_i3c_core_get_rxnak(ctx->core)) {
-			/* Controller DAA done */
+			/* Controller DAA done: no (more) targets answered the 0x7E/R.
+			 * This is the normal ENTDAA termination (including an empty bus),
+			 * not an error -- return success.
+			 */
 			rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_RXNAK_MASK);
+			ret = 0;
 			goto exit;
 		}
 
@@ -815,7 +845,9 @@ int rtk_i3c_do_daa(rtk_i3c_ctx *ctx)
 		}
 
 		if (rtk_i3c_core_get_rxnak(ctx->core)) {
+			/* RXNAK after issuing the read: DAA finished normally. */
 			rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_RXNAK_MASK);
+			ret = 0;
 			goto exit;
 		}
 
@@ -1443,6 +1475,17 @@ static __always_inline void rtk_i3c_rxibi_isr(rtk_i3c_ctx *ctx)
 	uint8_t mdb = BIT_FIELD_GET(trans_info, 24, 31);
 	uint16_t read_len = 0;
 	int bcr = 0;
+
+	/*
+	 * A Hot Join arbitrates on the reserved address 0x02 and can also raise
+	 * the RXIBI interrupt, but it is handled by the HJ ISR (which runs ENTDAA)
+	 * and has no target BCR. Skip it here so the BCR lookup does not log a
+	 * spurious "addr 2 not found" error.
+	 */
+	if (ibi_addr == I3C_HJ_ADDR) {
+		return;
+	}
+
 	if ((bcr = rtk_i3c_bus_get_bcr_by_addr(ctx, ibi_addr)) < 0) {
 		return;
 	};
