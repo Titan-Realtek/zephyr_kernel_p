@@ -565,6 +565,38 @@ static int i3c_realtek_do_daa(const struct device *dev)
 	ret = i3c_realtek_err_to_errno(rtk_i3c_do_daa(&data->rtk_ctx));
 	k_mutex_unlock(&data->bus_lock);
 
+#if defined(CONFIG_I3C_USE_IBI)
+	/*
+	 * Re-enable Hot Join on the bus after enumeration, Done outside bus_lock as it issues a
+	 * CCC. Best-effort.
+	 */
+	if (ret == 0) {
+		struct i3c_ccc_events hj_evt = {
+			.events = I3C_CCC_EVT_HJ,
+		};
+
+		(void)i3c_ccc_do_events_all_set(dev, true, &hj_evt);
+	}
+#endif /* CONFIG_I3C_USE_IBI */
+
+	return ret;
+}
+
+static int i3c_realtek_recover_bus(const struct device *dev)
+{
+	struct i3c_realtek_data *data = dev->data;
+	unsigned int key;
+	int ret;
+
+	/* Hold the bus lock against concurrent transfers, and briefly lock IRQs
+	 * because the recovery resets transfer state the ISR also touches.
+	 */
+	k_mutex_lock(&data->bus_lock, K_FOREVER);
+	key = irq_lock();
+	ret = i3c_realtek_err_to_errno(rtk_i3c_ctrl_recover(&data->rtk_ctx));
+	irq_unlock(key);
+	k_mutex_unlock(&data->bus_lock);
+
 	return ret;
 }
 
@@ -931,6 +963,15 @@ static int i3c_realtek_init(const struct device *dev)
 	config->irq_config_func(dev);
 
 	if (config->role == RTK_I3C_CTRL_PRIM) {
+		/*
+		 * Defer Hot-Join acceptance until after bus init (like i3c_cdns):
+		 * a HJ during the initial RSTDAA/ENTDAA would interfere. Configure
+		 * with HJ disabled, then re-enable it once the bus is up.
+		 */
+		bool want_hj = data->rtk_cfg.common_cfg.ibi.enable_hj;
+
+		data->rtk_cfg.common_cfg.ibi.enable_hj = false;
+
 		data->common.ctrl_config.scl.i3c = data->common.ctrl_config.scl.i3c
 							   ? data->common.ctrl_config.scl.i3c
 							   : RTK_I3C_I3C_PP_BAUD_HZ;
@@ -946,6 +987,26 @@ static int i3c_realtek_init(const struct device *dev)
 		ret = i3c_realtek_address_slots_init(dev);
 		if (ret != 0) {
 			return ret;
+		}
+
+		/*
+		 * Bring up the bus
+		 * RSTACT/RSTDAA, DISEC, SETDASA/
+		 * ENTDAA, then per device fetch BCR/DCR/MRL/MWL/CAPS via
+		 * i3c_device_basic_info_get(), and finally ENEC(HJ). Primary
+		 * controller only. Not fatal on failure (e.g. an empty bus at boot):
+		 * any device that did get an address still works.
+		 */
+		ret = i3c_bus_init(dev, &config->common.dev_list);
+		if (ret != 0) {
+			LOG_WRN("%s: i3c_bus_init failed (%d); continuing", dev->name, ret);
+			ret = 0;
+		}
+
+		/* Bus is up: now accept Hot Joins (deferred above). */
+		if (want_hj) {
+			data->rtk_cfg.common_cfg.ibi.enable_hj = true;
+			rtk_i3c_set_hj_accept(&data->rtk_ctx, true);
 		}
 	} else if (config->role == RTK_I3C_TAGT) {
 		struct i3c_config_target target_cfg = {
@@ -974,6 +1035,7 @@ static const struct i3c_driver_api i3c_realtek_api = {
 	.reattach_i3c_device = i3c_realtek_reattach_i3c_device,
 	.detach_i3c_device = i3c_realtek_detach_i3c_device,
 	.do_daa = i3c_realtek_do_daa,
+	.recover_bus = i3c_realtek_recover_bus,
 	.do_ccc = i3c_realtek_do_ccc,
 	.i3c_xfers = i3c_realtek_i3c_xfers,
 	.i3c_device_find = i3c_realtek_device_find,

@@ -459,6 +459,25 @@ void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *config);
 int rtk_i3c_ctrl_init(rtk_i3c_ctx *ctx, rtk_i3c_cfg *config);
 
 /**
+ * @brief Enable/disable Hot-Join acceptance independently.
+ *
+ * Lets the wrapper defer accepting Hot Joins until after bus initialization.
+ * @param ctx Pointer to I3C context
+ * @param enable true to accept incoming Hot Joins, false to reject
+ */
+void rtk_i3c_set_hj_accept(rtk_i3c_ctx *ctx, bool enable);
+
+/**
+ * @brief Recover a wedged controller bus.
+ *
+ * Flushes the FIFOs, clears pending interrupts and resets the transfer state
+ * back to controller idle. Backs the Zephyr .recover_bus hook.
+ * @param ctx Pointer to I3C context
+ * @return 0 on success, error code otherwise
+ */
+int rtk_i3c_ctrl_recover(rtk_i3c_ctx *ctx);
+
+/**
  * @brief Perform Dynamic Address Assignment
  * @param ctx Pointer to I3C context
  * @return Status code

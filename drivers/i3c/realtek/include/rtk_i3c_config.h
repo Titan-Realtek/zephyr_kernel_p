@@ -11,14 +11,14 @@
 
 /** FIFO_DEPTH = 2^FIFO_DEPTH_LOG  */
 #define RTK_I3C_FIFO_DEPTH     64
-/** Frequency in Hz for I3C communication (matches the SoC PLL feeding the I3C IP). */
-#define RTK_I3C_FREQ_HZ        100000000U
+/** Frequency in Hz for I3C communication (PLL125M source, IPDIV5 = /1 -> 125 MHz IP clock). */
+#define RTK_I3C_FREQ_HZ        125000000U
 /** Max target number to manage . */
 #define RTK_I3C_MAX_TAGT_COUNT 8
 /** Max dynamic address to be assigned . */
 #define RTK_I3C_MAX_DYN_ADDR   0x7f
 
-#define RTK_I3C_LEGACY_I2C
+// #define RTK_I3C_LEGACY_I2C
 
 /**
  * @brief Enable I3C User PID input signal

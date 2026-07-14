@@ -25,3 +25,24 @@
 		i3c-controller-0 = &i3c4;
 	};
 };
+
+/*
+ * Declare the expected target(s) under the controller node. Following the
+ * Zephyr design, a target must be declared here (matched by PID) so that when
+ * it hot-joins, the ENTDAA'd dynamic address binds to its i3c_device_desc and
+ * the app (auto-ENEC, IBI callback, transfers) can use it.
+ *
+ * reg = <static-addr  PID-msb  PID-lsb>. Adjust these to match the actual
+ * target: its static address and 48-bit Provisioned ID (pid-msb/pid-lsb on the
+ * target node).
+ */
+&i3c4 {
+	/* PID 0xFFA4BA84CE07 -> pid-msb 0xFFA4, pid-lsb 0xBA84CE07.
+	 * reg = <static-addr PID-msb PID-lsb>; static 0 = pure I3C (ENTDAA hot-join).
+	 */
+	hj_target0: target@000000ffa4ba84ce07 {
+		compatible = "realtek,rts5918-i3c-target";
+		reg = <0x00 0xffa4 0xba84ce07>;
+		assigned-address = <0x08>;
+	};
+};

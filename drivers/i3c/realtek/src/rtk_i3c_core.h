@@ -1072,17 +1072,70 @@ static inline void rtk_i3c_core_set_i2c(rtk_i3c_core *core, bool enable)
 	rtk_core_write32_mask(&core->ipcr, 1, 1, enable);
 }
 
+/* OD SCL high-time duty (%). THIGH_OD = duty * (BDR_OD * 2) / 100. */
+#ifndef RTK_I3C_OD_DUTY_PCT
+#define RTK_I3C_OD_DUTY_PCT 50U
+#endif
+
+/*
+ * Program the controller baud dividers and the timing that is derived from them
+ * (OD high period, sampling delays, edge alignment). Mirrors the IP-recommended
+ * master clock setup (i3c_dev_ctl_set_clk):
+ *   - BDR_PP / BDR_OD  = Round_up(sysclk / (2 * clk))
+ *   - BDR_FST          = Round_up(tHIGH_INIT / tSYSCLK / 4), tHIGH_INIT = 1300 ns
+ *   - THIGH_OD         = duty% of the full OD period (BDR_OD * 2 cycles)
+ *   - PDLY / ODLY / ADLY sample at the MIDPOINT of the SCL logic state (bdr/2),
+ *     with RHDY set (sample SDA after the SCL rising edge) and RDGE cleared.
+ * These delay values scale with the divider (tens of cycles); the earlier fixed
+ * few-ns values mis-placed the OD sample point and dropped bytes on OD reads
+ * (e.g. the ENTDAA characteristics read).
+ *
+ * Called from ctrl_init after set_timing(), so these fields intentionally
+ * override the generic values set there.
+ */
 static inline void rtk_i3c_core_set_baud_rate(rtk_i3c_core *core, const rtk_i3c_bitrate_cfg *cfg,
 					      uint32_t i3c_freq_hz)
 {
-	uint32_t i3c_fst_baud_hz = cfg->i3c_od_baud_hz;
+	uint32_t bdr_pp = ROUND_UP(i3c_freq_hz / 2, cfg->i3c_pp_baud_hz);
+	uint32_t bdr_od = ROUND_UP(i3c_freq_hz / 2, cfg->i3c_od_baud_hz);
+	uint32_t bdr_fst = (uint32_t)(((uint64_t)13U * i3c_freq_hz + 39999999ULL) / 40000000ULL);
+	uint32_t thigh_od, pdly, odly;
 
-	rtk_core_write32_mask(&core->cbdr, 16, 23, ROUND_UP(i3c_freq_hz / 2, cfg->i3c_pp_baud_hz));
-	rtk_core_write32_mask(&core->cbdr, 0, 15, ROUND_UP(i3c_freq_hz / 2, cfg->i3c_od_baud_hz));
-	if (i3c_fst_baud_hz > 400000) {
-		i3c_fst_baud_hz = 400000;
+	if (bdr_pp < 5U) {
+		bdr_pp = 5U;
 	}
-	rtk_core_write32_mask(&core->cbdr, 24, 31, ROUND_UP(i3c_freq_hz / 2 / 4, i3c_fst_baud_hz));
+	if (bdr_fst == 0U) {
+		bdr_fst = 1U;
+	}
+
+	thigh_od = (RTK_I3C_OD_DUTY_PCT * (bdr_od * 2U)) / 100U;
+	if (thigh_od < 5U) {
+		thigh_od = 5U;
+	}
+
+	/* Sample at the midpoint of the SCL logic state. */
+	pdly = bdr_pp / 2U;
+	odly = (bdr_od > 1U) ? (bdr_od / 2U) : 1U;
+
+	/* CBDR: BDR_OD[15:0], BDR_PP[23:16], BDR_FST[31:24]. */
+	rtk_core_write32_mask(&core->cbdr, 0, 15, bdr_od);
+	rtk_core_write32_mask(&core->cbdr, 16, 23, bdr_pp);
+	rtk_core_write32_mask(&core->cbdr, 24, 31, bdr_fst);
+
+	/* OD high period. */
+	rtk_core_write32_mask(&core->tinit, TINIT_THIGH_OD_LOW, TINIT_THIGH_OD_HIGH, thigh_od);
+
+	/* tCAS. */
+	rtk_core_write32_mask(&core->tssr0, TSSr0_TCAS_LOW, TSSr0_TCAS_HIGH, 0x9FU);
+
+	/* TDLYR: PDLY + ODLY, clear RDGE (rely on RHDY below). */
+	rtk_core_write32_mask(&core->tdlyr, TDLYR_PDLY_LOW, TDLYR_PDLY_HIGH, pdly);
+	rtk_core_write32_mask(&core->tdlyr, TDLYR_ODY_LOW, TDLYR_ODY_HIGH, odly);
+	rtk_core_write32_mask(&core->tdlyr, TDLYR_RDGE_LOW, TDLYR_RDGE_HIGH, 0U);
+
+	/* TDLYR2: ADLY = ODLY, set RHDY (sample SDA after the SCL rising edge). */
+	rtk_core_write32_mask(&core->tdlyr2, TDLYR2_ADLY_LOW, TDLYR2_ADLY_HIGH, odly);
+	rtk_core_write32_mask(&core->tdlyr2, TDLYR2_RHDY_LOW, TDLYR2_RHDY_HIGH, 1U);
 }
 
 /**
@@ -1096,6 +1149,19 @@ static inline void rtk_i3c_core_set_ibi_cap(rtk_i3c_core *core, const rtk_i3c_ib
 	rtk_core_write32_mask(&core->ec, 1, 1, cfg->enable_cr);
 	/* hj  – bit 3 of EC */
 	rtk_core_write32_mask(&core->ec, 3, 3, cfg->enable_hj);
+	/* ibi_payload_size [31:24]: max IBI payload the controller accepts. Match
+	 * the verified IP setup (0xFF) instead of the 0x10 reset default.
+	 */
+	rtk_core_write32_mask(&core->ec, 24, 31, 0xFF);
+}
+
+/**
+ * Enable/disable Hot-Join acceptance (EC bit 3) independently of the other IBI
+ * capability bits. Used to defer HJ acceptance until after bus initialization.
+ */
+static inline void rtk_i3c_core_set_hj_accept(rtk_i3c_core *core, bool enable)
+{
+	rtk_core_write32_mask(&core->ec, 3, 3, (uint32_t)enable);
 }
 
 /**
@@ -1179,6 +1245,11 @@ static inline void rtk_i3c_core_set_timing(rtk_i3c_core *core, const rtk_i3c_tim
 	/* iocr.busy_to */
 	rtk_core_write32_mask(&core->iocr, IOCR_BUSY_TO_LOW, IOCR_BUSY_TO_HIGH,
 			      cfg->enable_timeout_detection);
+
+	/* iocr.sda_dly [15:12] = 1: SDA sample/output delay, per the verified IP
+	 * setup (IOCR = 0x00001000). Left at reset (0) the SDA edge is not delayed.
+	 */
+	rtk_core_write32_mask(&core->iocr, 12, 15, 1);
 
 	/* tssr0.tds */
 	rtk_core_write32_mask(&core->tssr0, TSSr0_TDS_LOW, TSSr0_TDS_HIGH,

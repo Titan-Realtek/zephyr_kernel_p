@@ -192,12 +192,12 @@ static int cmd_reg(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "CBDR=0x%08x  BDR_PP=%u BDR_OD=%u BDR_FST=%u", cbdr, bdr_pp, bdr_od,
 		    bdr_fst);
 	shell_print(sh, "TINIT=0x%08x THIGH_OD=%u", tinit, thigh_od);
-	/* 100 MHz I3C clock (PLL): PP = clk/(2*BDR_PP), OD period = BDR_OD*2/clk. */
+	/* 125 MHz I3C clock (PLL125M, IPDIV5=/1): PP = clk/(2*BDR_PP), OD = clk/(2*BDR_OD). */
 	if (bdr_pp) {
-		shell_print(sh, "  -> PP ~= %u kHz", (unsigned int)(100000U / (2U * bdr_pp)));
+		shell_print(sh, "  -> PP ~= %u kHz", (unsigned int)(125000U / (2U * bdr_pp)));
 	}
 	if (bdr_od) {
-		shell_print(sh, "  -> OD ~= %u kHz", (unsigned int)(100000U / (2U * bdr_od)));
+		shell_print(sh, "  -> OD ~= %u kHz", (unsigned int)(125000U / (2U * bdr_od)));
 	}
 	return 0;
 }
@@ -248,11 +248,13 @@ int main(void)
 		return 0;
 	}
 
-	/* Run 'i3c_controller ibi_enable' once to arm. After that, when a target sends a
-	 * Hot Join the core auto-runs DAA and this app auto-ENECs it -- no further
-	 * commands needed. 'i3c_controller list' shows devices; 'ibi_disable' disarms.
+	/* Arm auto-IBI at boot (Zephyr convention: per-device ENEC(INTR) is the
+	 * app's job). When a target (hot-)joins, the driver auto-runs DAA and binds
+	 * it; this app then ENECs it automatically -- no shell command needed.
+	 * 'i3c_controller ibi_disable' disarms.
 	 */
-	LOG_INF("%s: controller ready; run 'i3c_controller ibi_enable' to arm", ctrl_dev->name);
+	auto_ibi = true;
+	LOG_INF("%s: controller ready; auto-IBI armed", ctrl_dev->name);
 
 	return 0;
 }
