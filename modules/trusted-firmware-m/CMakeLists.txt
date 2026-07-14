@@ -379,11 +379,23 @@ if (CONFIG_BUILD_WITH_TFM)
     ${TFM_INTERFACE_INCLUDE_DIR}/crypto_keys
     ${ZEPHYR_BASE}/modules/mbedtls/configs
     )
-  # Pass down the MbedTLS configuration file to use.
+# Pass down the MbedTLS configuration file to use.
+# If Zephyr's CONFIG_MBEDTLS_CFG_FILE is empty, use TF-M client-side config
+# for TF-M NS API sources such as tfm_crypto_api.c.
+set(TFM_MBEDCRYPTO_CONFIG_DIR
+  "${ZEPHYR_BASE}/realtek/tee/trusted-firmware-m/lib/ext/mbedcrypto/mbedcrypto_config"
+)
+
+if(CONFIG_MBEDTLS_CFG_FILE)
   target_compile_definitions(tfm_api PUBLIC
     MBEDTLS_CONFIG_FILE="${CONFIG_MBEDTLS_CFG_FILE}"
     )
-
+else()
+  target_compile_definitions(tfm_api PUBLIC
+    MBEDTLS_CONFIG_FILE="${TFM_MBEDCRYPTO_CONFIG_DIR}/tfm_mbedcrypto_config_default_client.h"
+    MBEDTLS_PSA_CRYPTO_CONFIG_FILE="${TFM_MBEDCRYPTO_CONFIG_DIR}/crypto_config_default.h"
+    )
+endif()
   zephyr_library_link_libraries(
     ${TFM_INTERFACE_LIB_DIR}/s_veneers.o
     )
