@@ -468,6 +468,19 @@ int rtk_i3c_ctrl_init(rtk_i3c_ctx *ctx, rtk_i3c_cfg *config);
 void rtk_i3c_set_hj_accept(rtk_i3c_ctx *ctx, bool enable);
 
 /**
+ * @brief Program the per-target IBI Mandatory Data Byte / payload bit in HW.
+ *
+ * Tells the controller whether the target at @p dyn_addr sends a payload after
+ * the MDB, so the core clocks the payload in on an incoming IBI. Must be set for
+ * every DAA'd target (including devicetree-declared ones), otherwise a
+ * payload-carrying IBI stalls after the address ACK.
+ * @param ctx Pointer to I3C context
+ * @param dyn_addr Target dynamic address
+ * @param ibi_payload true if the target's IBI carries a payload (BCR bit2)
+ */
+void rtk_i3c_set_ibi_mdb(rtk_i3c_ctx *ctx, uint8_t dyn_addr, bool ibi_payload);
+
+/**
  * @brief Recover a wedged controller bus.
  *
  * Flushes the FIFOs, clears pending interrupts and resets the transfer state

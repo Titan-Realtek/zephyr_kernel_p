@@ -628,6 +628,12 @@ void rtk_i3c_set_hj_accept(rtk_i3c_ctx *ctx, bool enable)
 	rtk_i3c_core_set_hj_accept(ctx->core, enable);
 }
 
+void rtk_i3c_set_ibi_mdb(rtk_i3c_ctx *ctx, uint8_t dyn_addr, bool ibi_payload)
+{
+	ASSERT(ctx != NULL && ctx->core != NULL);
+	rtk_i3c_core_set_mdb(ctx->core, dyn_addr, ibi_payload);
+}
+
 int rtk_i3c_ctrl_recover(rtk_i3c_ctx *ctx)
 {
 	ASSERT(ctx != NULL);

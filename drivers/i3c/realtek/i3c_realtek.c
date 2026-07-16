@@ -264,6 +264,15 @@ static void i3c_realtek_handle_daa_phase(const struct device *dev,
 		target->bcr = tagt_char_info->bcr;
 		target->dcr = tagt_char_info->dcr;
 
+		/* Program the HW per-target IBI payload bit for this address. The
+		 * bus-layer path (rtk_i3c_bus_handle_daa) does this for undeclared
+		 * devices; declared devices bound here must set it too, otherwise a
+		 * payload-carrying IBI (BCR bit2=1) stalls after the address ACK
+		 * because the core never clocks the MDB/payload in.
+		 */
+		rtk_i3c_set_ibi_mdb(&data->rtk_ctx, assigned_addr,
+				    (tagt_char_info->bcr & I3C_BCR_IBI_PAYLOAD) != 0);
+
 		for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
 			if (!data->tagt_table[i].active ||
 			    data->tagt_table[i].info.char_info.pid == tagt_char_info->pid ||
