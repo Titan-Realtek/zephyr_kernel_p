@@ -34,7 +34,7 @@
 
 LOG_MODULE_REGISTER(i3c_target_test, LOG_LEVEL_INF);
 
-#define ECHO_BUF_SIZE     64
+#define ECHO_BUF_SIZE     256
 #define ECHO_THREAD_STACK 1024
 #define ECHO_THREAD_PRIO  7
 
@@ -307,11 +307,12 @@ static int echo_raise_ibi_none(struct echo_target *echo)
  *
  * A target cannot stall SCL and I3C TX has no bus flow control, and the core
  * pre-fills the TXDA FIFO once (no TX-threshold IRQ / no DMA here). The IBI
- * address frame also consumes ~4 bytes of the shared 64-byte TXDA FIFO, so the
- * usable IBI payload is ~60 bytes; larger returns -ENOSPC (e.g. 64 -> only 60
- * written). A genuinely large (e.g. 1024B) IBI payload requires the DMA path.
+ * address frame consumes 1 byte of the shared 256-byte TXDA FIFO (SDR address =
+ * 1 byte), so the usable IBI payload is 256 - 1 = 255 bytes (payload includes
+ * the MDB). Using the full 256 returns -ENOSPC (the FIFO guard reserves a whole
+ * 32-bit word, so only 252 get written). A larger IBI needs the DMA path.
  */
-#define ECHO_IBI_BIG_LEN 60U
+#define ECHO_IBI_BIG_LEN 255U
 static int echo_raise_ibi_big(struct echo_target *echo)
 {
 	static uint8_t buf[ECHO_IBI_BIG_LEN];

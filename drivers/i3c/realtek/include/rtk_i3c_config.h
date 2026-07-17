@@ -9,8 +9,10 @@
 #ifndef RTK_I3C_CONFIG_H_
 #define RTK_I3C_CONFIG_H_
 
-/** FIFO_DEPTH = 2^FIFO_DEPTH_LOG  */
-#define RTK_I3C_FIFO_DEPTH     64
+/** TX/RX data FIFO depth in bytes (matches the IP's TXDF/RXDF = 256). Used for
+ *  the TX overflow guard and the default target max read/write length.
+ */
+#define RTK_I3C_FIFO_DEPTH     256
 /** Frequency in Hz for I3C communication (PLL125M source, IPDIV5 = /1 -> 125 MHz IP clock). */
 #define RTK_I3C_FREQ_HZ        125000000U
 /** Max target number to manage . */
