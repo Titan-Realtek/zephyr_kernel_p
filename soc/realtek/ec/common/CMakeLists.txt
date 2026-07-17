@@ -8,6 +8,7 @@ zephyr_include_directories(.)
 # --- Handle RTS5918 img tool ---
 if (CONFIG_REALTEK_RTS5918_IMG_HEADER)
     set(RTS_BIN_NAME ${CONFIG_KERNEL_BIN_NAME}.rts5918.bin)
+    set(RTS_PAD_BIN_NAME ${CONFIG_KERNEL_BIN_NAME}.rts5918.pad.bin)
 
     # Set tool base
     set(IMG_TOOL_DIR ${ZEPHYR_BASE}/soc/realtek/ec/common/rts5918_imgtool)
@@ -31,6 +32,10 @@ if (NEEDS_IMG_GEN)
     COMMAND ${PYTHON_EXECUTABLE} ${IMG_TOOL_PATH} ${IMG_GEN_COMMAND}
     COMMAND ${PYTHON_EXECUTABLE} ${IMG_TOOL_DIR}/hex_dump.py
                 ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}
+    COMMAND ${CMAKE_OBJCOPY} -I binary -O binary 
+        --gap-fill 0xFF --pad-to 0x1000000 
+        ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME} 
+        ${PROJECT_BINARY_DIR}/${RTS_PAD_BIN_NAME}
     )
 
 endif()
