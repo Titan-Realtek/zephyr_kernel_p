@@ -387,7 +387,8 @@ typedef struct rtk_i3c_timing_cfg {
 	uint32_t bus_free_ns;
 	uint32_t bus_available_ns;
 	uint32_t bus_idle_ns;
-	uint32_t i3c_od_baud_hz;       /**< OD SCL rate, selects OD high/setup timing. */
+	uint32_t i3c_od_baud_hz; /**< OD SCL rate, selects OD high/setup timing. */
+	bool legacy_i2c;         /**< Bus has legacy I2C devices: use I2C-compatible timing. */
 	bool enable_timeout_detection; /**< Enable I3CC BUS timeout function. */
 } rtk_i3c_timing_cfg;
 
@@ -516,6 +517,21 @@ int rtk_i3c_do_ccc(rtk_i3c_ctx *ctx, const rtk_i3c_ccc *ccc, uint8_t i3c_mode, b
  * @return Status code
  */
 int rtk_i3c_ctrl_xfer(rtk_i3c_ctx *ctx, const rtk_i3c_tagt *tagt, uint8_t i3c_mode, bool restart);
+
+/**
+ * @brief Probe a target address (address-only presence check, no user data).
+ *
+ * Addresses the target for a short read and reports whether it ACKed. Intended
+ * for bus scans (e.g. the i2c shell `scan` command). Controller role only.
+ *
+ * @param ctx Pointer to I3C context
+ * @param addr Target address to probe
+ * @param i3c_mode Transfer mode (RTK_I3C_I2C for legacy I2C, RTK_I3C_SDR_MODE for I3C)
+ * @retval 0 target ACKed (present)
+ * @retval RTK_I3C_XFER_TERMINATION target NACKed (absent)
+ * @return other negative status on error
+ */
+int rtk_i3c_ctrl_probe(rtk_i3c_ctx *ctx, uint8_t addr, uint8_t i3c_mode);
 
 /**
  * @brief Read IBI data. Only for controller

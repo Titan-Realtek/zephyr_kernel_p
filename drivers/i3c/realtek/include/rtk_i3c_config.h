@@ -18,8 +18,6 @@
 /** Max dynamic address to be assigned . */
 #define RTK_I3C_MAX_DYN_ADDR   0x7f
 
-// #define RTK_I3C_LEGACY_I2C
-
 /**
  * @brief Enable I3C User PID input signal
  */

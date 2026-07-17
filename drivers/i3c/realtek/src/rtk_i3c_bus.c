@@ -305,12 +305,14 @@ int rtk_i3c_bus_init_tagt_table(rtk_i3c_ctx *ctx, uint8_t tagt_id, const char *n
 	}
 
 	/*
-	 * Skip when stc_addr == dyn_addr: the slot was just marked above as
-	 * dyn_addr, so re-checking it would spuriously report the device's own
-	 * address as occupied. This is the SETDASA case (init dynamic address
-	 * assigned via the static address), where the two are intentionally equal.
+	 * Only reserve a real static address. stc_addr == 0 means "no static
+	 * address" (ENTDAA/hot-join-only device); it is a reserved I3C address, not
+	 * a slot to occupy -- reserving it would make a second static-less device
+	 * collide on 0x00. Also skip when stc_addr == dyn_addr (SETDASA case: the
+	 * slot was just marked above as dyn_addr), so we do not flag the device's
+	 * own address as occupied.
 	 */
-	if (stc_addr <= RTK_I3C_MAX_DYN_ADDR && stc_addr != dyn_addr) {
+	if (stc_addr != 0 && stc_addr <= RTK_I3C_MAX_DYN_ADDR && stc_addr != dyn_addr) {
 		if (rtk_i3c_bus_is_addr_slot_occupied(ctx, stc_addr)) {
 			LOG_ERR("addr: 0x%02x is occupied!\n", stc_addr);
 			return RTK_I3C_ADDR_OCCUPIED;

@@ -1189,58 +1189,63 @@ static inline void rtk_i3c_core_set_timing(rtk_i3c_core *core, const rtk_i3c_tim
 	uint32_t sta_to_ns, sda_to_ns;
 	uint32_t crhpoverlap_ns, newcrlock_ns;
 
-#ifdef RTK_I3C_LEGACY_I2C
-	/* Not used in I2C */
-	cas_ns = 0;
-	ds_ns = 0;
-	crhpoverlap_ns = 0;
-	newcrlock_ns = 0;
-	sta_to_ns = 0;
-	sda_to_ns = 0;
-	hd_dat_ns = 0;
-	/* OD SCL high / start-stop setup-hold timing follows the runtime OD baud
-	 * (from devicetree) instead of a compile-time bucket, so changing the OD
-	 * rate in the DT keeps the OD duty/timing correct.
+	/* Per-instance: a bus carrying legacy I2C devices needs I2C-compatible
+	 * timing; a pure-I3C bus uses full I3C SDR timing. Decided at runtime from
+	 * the devicetree device list (see i3c_realtek.c), not a build-time macro,
+	 * so different controller instances can differ.
 	 */
-	if (cfg->i3c_od_baud_hz <= 100000) {
-		high_ns = 4000 + 1000;
-		su_sta_ns = 4700;
-		hd_sta_ns = 4000;
-		su_sto_ns = 4000;
-		hd_dat_od_ns = 300 + 0;
-	} else if (cfg->i3c_od_baud_hz <= 400000) {
-		high_ns = 600 + 300;
+	if (cfg->legacy_i2c) {
+		/* Not used in I2C */
+		cas_ns = 0;
+		ds_ns = 0;
+		crhpoverlap_ns = 0;
+		newcrlock_ns = 0;
+		sta_to_ns = 0;
+		sda_to_ns = 0;
+		hd_dat_ns = 0;
+		/* OD SCL high / start-stop setup-hold timing follows the runtime OD
+		 * baud (from devicetree) instead of a compile-time bucket, so changing
+		 * the OD rate in the DT keeps the OD duty/timing correct.
+		 */
+		if (cfg->i3c_od_baud_hz <= 100000) {
+			high_ns = 4000 + 1000;
+			su_sta_ns = 4700;
+			hd_sta_ns = 4000;
+			su_sto_ns = 4000;
+			hd_dat_od_ns = 300 + 0;
+		} else if (cfg->i3c_od_baud_hz <= 400000) {
+			high_ns = 600 + 300;
+			su_sta_ns = 600 + 20;
+			hd_sta_ns = 600 + 20;
+			su_sto_ns = 600 + 20;
+			hd_dat_od_ns = 20 + 6;
+		} else if (cfg->i3c_od_baud_hz <= 1000000) {
+			high_ns = 260 + 120;
+			su_sta_ns = 260 + 160;
+			hd_sta_ns = 260 + 160;
+			su_sto_ns = 260 + 0;
+			hd_dat_od_ns = 0 + 0;
+		} else {
+			high_ns = 60 + 40;
+			su_sta_ns = 260 + 160;
+			hd_sta_ns = 260 + 160;
+			su_sto_ns = 160 + 20;
+			hd_dat_od_ns = 20 + 0;
+		}
+	} else {
+		cas_ns = 39;
+		ds_ns = 0;
 		su_sta_ns = 600 + 20;
 		hd_sta_ns = 600 + 20;
-		su_sto_ns = 600 + 20;
+		high_ns = 36 + 4;
+		su_sto_ns = 20 + 20;
+		crhpoverlap_ns = 200 + 40;
+		newcrlock_ns = 1000;
+		sta_to_ns = 100000;
+		sda_to_ns = 100000;
 		hd_dat_od_ns = 20 + 6;
-	} else if (cfg->i3c_od_baud_hz <= 1000000) {
-		high_ns = 260 + 120;
-		su_sta_ns = 260 + 160;
-		hd_sta_ns = 260 + 160;
-		su_sto_ns = 260 + 0;
-		hd_dat_od_ns = 0 + 0;
-	} else {
-		high_ns = 60 + 40;
-		su_sta_ns = 260 + 160;
-		hd_sta_ns = 260 + 160;
-		su_sto_ns = 160 + 20;
-		hd_dat_od_ns = 20 + 0;
+		hd_dat_ns = 6 + 0;
 	}
-#else  /* RTK_I3C_LEGACY_I2C */
-	cas_ns = 39;
-	ds_ns = 0;
-	su_sta_ns = 600 + 20;
-	hd_sta_ns = 600 + 20;
-	high_ns = 36 + 4;
-	su_sto_ns = 20 + 20;
-	crhpoverlap_ns = 200 + 40;
-	newcrlock_ns = 1000;
-	sta_to_ns = 100000;
-	sda_to_ns = 100000;
-	hd_dat_od_ns = 20 + 6;
-	hd_dat_ns = 6 + 0;
-#endif /* RTK_I3C_LEGACY_I2C */
 
 	/* iocr.busy_to */
 	rtk_core_write32_mask(&core->iocr, IOCR_BUSY_TO_LOW, IOCR_BUSY_TO_HIGH,
