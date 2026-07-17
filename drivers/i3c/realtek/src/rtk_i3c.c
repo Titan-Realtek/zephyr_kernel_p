@@ -681,14 +681,12 @@ void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 #else
 		cfg->common_cfg.ibi.enable_cr = false;
 #endif
-#ifdef RTK_I3C_LEGACY_I2C
-		cfg->common_cfg.timing.bus_free_ns = ((RTK_I3C_I3C_OD_BAUD_HZ <= 100000)    ? 4700
-						      : (RTK_I3C_I3C_OD_BAUD_HZ <= 400000)  ? 1300
-						      : (RTK_I3C_I3C_OD_BAUD_HZ <= 1000000) ? 500
-											    : 1300);
-#else
+		/* Default to pure-I3C timing. Whether this bus needs legacy-I2C
+		 * timing (and the matching bus-free time) is decided per instance by
+		 * the Zephyr wrapper from the devicetree device list.
+		 */
+		cfg->common_cfg.timing.legacy_i2c = false;
 		cfg->common_cfg.timing.bus_free_ns = 1300;
-#endif
 		cfg->common_cfg.timing.bus_idle_ns = 200000;
 		cfg->common_cfg.timing.bus_available_ns = 2000;
 		cfg->common_cfg.timing.i3c_od_baud_hz = RTK_I3C_I3C_OD_BAUD_HZ;
@@ -919,6 +917,11 @@ int rtk_i3c_do_ccc(rtk_i3c_ctx *ctx, const rtk_i3c_ccc *ccc, uint8_t i3c_mode, b
 
 	ctx->ccc_id = ccc->id;
 	rtk_i3c_init_xfer(ctx, i3c_mode);
+	/* Poll the NACK status below instead of letting the async rxnak ISR clear
+	 * it; this lets a NACKed CCC return promptly instead of waiting for a DONE
+	 * that never comes (empty bus).
+	 */
+	rtk_i3c_core_set_rxnak_isr(ctx->core, false);
 	if (ctx->state == STATE_CTRL_IDLE && ccc->num_tagts == 0) {
 		ctx->state = STATE_CTRL_CMD_WRITE;
 	}
@@ -951,17 +954,47 @@ int rtk_i3c_do_ccc(rtk_i3c_ctx *ctx, const rtk_i3c_ccc *ccc, uint8_t i3c_mode, b
 
 	ret = 0;
 
-exit_err:
-	if (rtk_i3c_complete_xfer(ctx, i3c_mode, restart) != 0 && ret == 0) {
-		ret = RTK_I3C_TIMEOUT;
+	/* For a broadcast CCC, wait until the frame is actually driven out (TX FIFO
+	 * drains) or the 0x7E is NACKed, before the rxnak check below. Writing the
+	 * frame only queues it into the FIFO; polling rxnak immediately samples it
+	 * too early and misses the NACK, after which complete_xfer waits for a DONE
+	 * that never comes on a bus with no I3C target (times out -> -ETIMEDOUT).
+	 * Mirrors the poll in rtk_i3c_do_daa. The rxnak path exits early, so this
+	 * does not spin on a NACKed bus.
+	 */
+	if (ccc->num_tagts == 0) {
+		uint32_t wait_count = 1000000;
+
+		while (!rtk_i3c_core_get_rxnak(ctx->core) &&
+		       rtk_i3c_core_get_txfl(ctx->core) > 0U && (wait_count-- > 0)) {
+			;
+		}
 	}
+
+exit_err:
+	if (rtk_i3c_core_get_rxnak(ctx->core)) {
+		/* NACK during the address phase. For a broadcast CCC (0x7E) this only
+		 * means no target answered -- benign; skip the DONE wait so we don't
+		 * time out on an empty bus. A directed CCC NACK is a real error and is
+		 * already reported by rtk_i3c_ctrl_xfer.
+		 */
+		if (ret == 0 && !IS_CCC_BRCT(ccc->id)) {
+			ret = RTK_I3C_XFER_TERMINATION;
+		}
+		rtk_i3c_core_flush_all(ctx->core);
+	} else {
+		if (rtk_i3c_complete_xfer(ctx, i3c_mode, restart) != 0 && ret == 0) {
+			ret = RTK_I3C_TIMEOUT;
+		}
+		if (ret < 0) {
+			rtk_i3c_core_flush_all(ctx->core);
+		}
+	}
+
+	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
 
 	if (ctx->state == STATE_CTRL_CMD_READ || ctx->state == STATE_CTRL_CMD_WRITE) {
 		ctx->state = STATE_CTRL_IDLE;
-	}
-
-	if (ret < 0) {
-		rtk_i3c_core_flush_all(ctx->core);
 	}
 
 	return ret;
@@ -1036,6 +1069,77 @@ exit_nack:
 	if (ret < 0) {
 		rtk_i3c_core_flush_all(ctx->core);
 	}
+
+	return ret;
+}
+
+int rtk_i3c_ctrl_probe(rtk_i3c_ctx *ctx, uint8_t addr, uint8_t i3c_mode)
+{
+	ASSERT(ctx != NULL && ctx->core != NULL);
+	RETURN_ERROR_IF(i3c_mode >= RTK_I3C_MODE_MAX, RTK_I3C_INVAL_PARAM);
+	RETURN_ERROR_IF(ctx->state != STATE_CTRL_IDLE, RTK_I3C_BUSY);
+
+	int ret;
+	uint8_t dummy = 0U;
+	rtk_i3c_msg rmsg = {
+		.data = &dummy,
+		.len = 1U,
+		.count = 0U,
+		.flags = RTK_I3C_READ,
+	};
+	rtk_i3c_rx_buffer *xfer_buffer;
+
+	/* Address presence check (e.g. `i2c scan`): address the target for a 1-byte
+	 * read and see whether it ACKs. NACK detection mirrors do_daa: poll the NACK
+	 * status (rxnak ISR disabled) until either a byte arrives (ACK) or the frame
+	 * is NACKed (no device). Checking rxnak only after the read is issued avoids
+	 * the false-ACK seen when it is sampled too early.
+	 */
+	rtk_i3c_init_xfer(ctx, i3c_mode);
+	ctx->state = STATE_CTRL_PRV_READ;
+	rtk_i3c_core_set_rxnak_isr(ctx->core, false);
+	rtk_i3c_core_set_rxne_isr(ctx->core, false);
+
+	if ((ret = rtk_i3c_write_addr_frame(ctx, addr, true, false, i3c_mode)) < 0) {
+		goto exit;
+	}
+	xfer_buffer = rtk_i3c_set_buffer(ctx, &rmsg);
+	if ((ret = rtk_i3c_write_data_frame(ctx, xfer_buffer->msg, true, i3c_mode)) < 0) {
+		goto exit;
+	}
+
+	uint32_t wait_count = 1000000;
+
+	while ((rtk_i3c_core_get_rx_fifo_len(ctx->core) < 1U) &&
+	       !rtk_i3c_core_get_rxnak(ctx->core) && (wait_count-- > 0)) {
+		;
+	}
+
+	if (rtk_i3c_core_get_rxnak(ctx->core)) {
+		/* NACK: no device at this address. HW ends the frame itself. */
+		rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_RXNAK_MASK);
+		ret = RTK_I3C_XFER_TERMINATION;
+		goto exit;
+	}
+	if (rtk_i3c_core_get_rx_fifo_len(ctx->core) < 1U) {
+		ret = RTK_I3C_TIMEOUT;
+		goto exit;
+	}
+
+	/* ACK: target responded. Close the read frame with a STOP. */
+	ret = 0;
+	rtk_i3c_write_end_frame(ctx->core);
+	if (rtk_i3c_core_wait_xfer_done(ctx->core) != 0) {
+		ret = RTK_I3C_TIMEOUT;
+	}
+
+exit:
+	ctx->state = STATE_CTRL_IDLE;
+	ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
+	ctx->tx_buffer = (rtk_i3c_tx_buffer){0};
+	rtk_i3c_core_flush_all(ctx->core);
+	rtk_i3c_core_set_rxne_isr(ctx->core, true);
+	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
 
 	return ret;
 }

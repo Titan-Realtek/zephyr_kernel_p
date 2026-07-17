@@ -13,6 +13,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/clock_control/clock_control_rts5918.h>
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/i3c.h>
 #include <zephyr/drivers/i3c/target_device.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -185,6 +186,112 @@ static int i3c_realtek_detach_i3c_device(const struct device *dev, struct i3c_de
 
 	if (target->dynamic_addr != 0U) {
 		rtk_i3c_bus_free_addr(&data->rtk_ctx, target->dynamic_addr);
+	}
+
+	return 0;
+}
+
+/*
+ * Legacy I2C support: a plain I2C device on the I3C bus is addressed with the
+ * I2C protocol (open-drain, no CCC). These back the Zephyr i2c_* API and the
+ * subsystem's attach/detach of devicetree-declared I2C children.
+ */
+static int i3c_realtek_i2c_configure(const struct device *dev, uint32_t dev_config)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(dev_config);
+	/* The I2C SCL rate comes from the devicetree (i2c-scl-hz) at init; accept
+	 * the request without reconfiguring the bus on the fly.
+	 */
+	return 0;
+}
+
+static int i3c_realtek_i2c_transfer(const struct device *dev, struct i2c_msg *msgs,
+				    uint8_t num_msgs, uint16_t addr)
+{
+	struct i3c_realtek_data *data = dev->data;
+	int ret = 0;
+
+	if (msgs == NULL) {
+		return -EINVAL;
+	}
+
+	k_mutex_lock(&data->bus_lock, K_FOREVER);
+
+	for (uint8_t i = 0; i < num_msgs; i++) {
+		/* A zero-length message is an address-only presence check (the i2c
+		 * shell `scan` command issues a zero-length write per address). Probe
+		 * the address and report the target ACK/NACK.
+		 */
+		if (msgs[i].len == 0U) {
+			ret = i3c_realtek_err_to_errno(
+				rtk_i3c_ctrl_probe(&data->rtk_ctx, (uint8_t)addr, RTK_I3C_I2C));
+			if (ret != 0) {
+				break;
+			}
+			continue;
+		}
+
+		if (msgs[i].buf == NULL) {
+			ret = -EINVAL;
+			break;
+		}
+
+		rtk_i3c_msg msg = {
+			.data = msgs[i].buf,
+			.len = msgs[i].len,
+			.count = 0U,
+			.flags = (msgs[i].flags & I2C_MSG_READ) ? RTK_I3C_READ : RTK_I3C_WRITE,
+		};
+		rtk_i3c_tagt tagt = {
+			.addr = (uint8_t)addr,
+			.msg = &msg,
+		};
+		/* Legacy I2C SDR (no CCC). Keep the bus (repeated start) unless this
+		 * message is flagged to end with a STOP.
+		 */
+		bool restart = ((msgs[i].flags & I2C_MSG_STOP) == 0U);
+
+		ret = i3c_realtek_err_to_errno(
+			rtk_i3c_ctrl_xfer(&data->rtk_ctx, &tagt, RTK_I3C_I2C, restart));
+		if (ret != 0) {
+			break;
+		}
+	}
+
+	k_mutex_unlock(&data->bus_lock);
+
+	return ret;
+}
+
+static int i3c_realtek_attach_i2c_device(const struct device *dev, struct i3c_i2c_device_desc *desc)
+{
+	struct i3c_realtek_data *data = dev->data;
+
+	/* Record the I2C device in the core target table (reserves its address).
+	 * Reuse the slot already holding this I2C address, else take an empty one.
+	 */
+	for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
+		rtk_i3c_bus_tagt_item *slot = &data->tagt_table[i];
+		bool empty = !slot->info.is_i2c && slot->info.char_info.pid == 0U &&
+			     slot->info.dyn_addr == 0U && slot->info.stc_addr == 0U;
+		bool same = slot->info.is_i2c && slot->info.stc_addr == desc->addr;
+
+		if (empty || same) {
+			return i3c_realtek_err_to_errno(rtk_i3c_bus_init_tagt_table(
+				&data->rtk_ctx, i, "i2c", 0U, desc->addr, 0U, true));
+		}
+	}
+
+	return -ENOSPC;
+}
+
+static int i3c_realtek_detach_i2c_device(const struct device *dev, struct i3c_i2c_device_desc *desc)
+{
+	struct i3c_realtek_data *data = dev->data;
+
+	if (desc->addr != 0U) {
+		rtk_i3c_bus_free_addr(&data->rtk_ctx, desc->addr);
 	}
 
 	return 0;
@@ -468,6 +575,42 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 	}
 }
 
+/*
+ * Determine the bus mode from the legacy I2C devices declared on this instance,
+ * inspect every I2C device's LVR and
+ * pick the most restrictive mode. A bus with no I2C devices stays PURE I3C.
+ * This is what selects legacy-I2C-compatible bus timing, per instance.
+ */
+static enum i3c_bus_mode i3c_realtek_bus_mode(const struct i3c_dev_list *dev_list)
+{
+	enum i3c_bus_mode mode = I3C_BUS_MODE_PURE;
+
+	for (int i = 0; i < dev_list->num_i2c; i++) {
+		switch (I3C_LVR_I2C_DEV_IDX(dev_list->i2c[i].lvr)) {
+		case I3C_LVR_I2C_DEV_IDX_0:
+			if (mode < I3C_BUS_MODE_MIXED_FAST) {
+				mode = I3C_BUS_MODE_MIXED_FAST;
+			}
+			break;
+		case I3C_LVR_I2C_DEV_IDX_1:
+			if (mode < I3C_BUS_MODE_MIXED_LIMITED) {
+				mode = I3C_BUS_MODE_MIXED_LIMITED;
+			}
+			break;
+		case I3C_LVR_I2C_DEV_IDX_2:
+			if (mode < I3C_BUS_MODE_MIXED_SLOW) {
+				mode = I3C_BUS_MODE_MIXED_SLOW;
+			}
+			break;
+		default:
+			mode = I3C_BUS_MODE_INVALID;
+			break;
+		}
+	}
+
+	return mode;
+}
+
 static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type type,
 				 void *bus_config)
 {
@@ -500,6 +643,23 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 		data->rtk_cfg.common_cfg.timing.i3c_od_baud_hz = config->i3c_od_scl_hz;
 		data->rtk_cfg.bitrate_cfg.i2c_baud_hz =
 			ctrl_cfg->scl.i2c ? ctrl_cfg->scl.i2c : RTK_I3C_I2C_BAUD_HZ;
+
+		/* Per-instance: use legacy-I2C-compatible timing only if this bus
+		 * actually carries I2C devices (derived from the devicetree LVRs).
+		 * The bus-free time then follows the OD SCL rate, matching I2C tBUF.
+		 */
+		data->rtk_cfg.common_cfg.timing.legacy_i2c =
+			i3c_realtek_bus_mode(&config->common.dev_list) != I3C_BUS_MODE_PURE;
+		if (data->rtk_cfg.common_cfg.timing.legacy_i2c) {
+			uint32_t od = config->i3c_od_scl_hz;
+
+			data->rtk_cfg.common_cfg.timing.bus_free_ns = (od <= 100000)    ? 4700
+								      : (od <= 400000)  ? 1300
+								      : (od <= 1000000) ? 500
+											: 1300;
+		} else {
+			data->rtk_cfg.common_cfg.timing.bus_free_ns = 1300;
+		}
 		ret = i3c_realtek_err_to_errno(rtk_i3c_ctrl_init(&data->rtk_ctx, &data->rtk_cfg));
 		break;
 	case I3C_CONFIG_TARGET:
@@ -973,7 +1133,7 @@ static int i3c_realtek_init(const struct device *dev)
 
 	if (config->role == RTK_I3C_CTRL_PRIM) {
 		/*
-		 * Defer Hot-Join acceptance until after bus init (like i3c_cdns):
+		 * Defer Hot-Join acceptance until after bus init:
 		 * a HJ during the initial RSTDAA/ENTDAA would interfere. Configure
 		 * with HJ disabled, then re-enable it once the bus is up.
 		 */
@@ -1038,11 +1198,16 @@ static int i3c_realtek_init(const struct device *dev)
 }
 
 static const struct i3c_driver_api i3c_realtek_api = {
+	.i2c_api.configure = i3c_realtek_i2c_configure,
+	.i2c_api.transfer = i3c_realtek_i2c_transfer,
+
 	.configure = i3c_realtek_configure,
 	.config_get = i3c_realtek_config_get,
 	.attach_i3c_device = i3c_realtek_attach_i3c_device,
 	.reattach_i3c_device = i3c_realtek_reattach_i3c_device,
 	.detach_i3c_device = i3c_realtek_detach_i3c_device,
+	.attach_i2c_device = i3c_realtek_attach_i2c_device,
+	.detach_i2c_device = i3c_realtek_detach_i2c_device,
 	.do_daa = i3c_realtek_do_daa,
 	.recover_bus = i3c_realtek_recover_bus,
 	.do_ccc = i3c_realtek_do_ccc,
