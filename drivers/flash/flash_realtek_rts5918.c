@@ -136,6 +136,11 @@ struct flash_rts5918_dev_data {
 	 * SPIC0 via FLASH_RTS5918_EX_OP_SELECT_CS before each op.
 	 */
 	uint8_t cs;
+	/**
+	 * record the total capacity in 2's exponentail.
+	 * e.g. 32MB = 2^25. The value is 25.
+	 */
+	uint8_t capacity[2];
 };
 
 static inline const bool is_4byte_address(uint32_t address)
@@ -1299,19 +1304,29 @@ static int flash_normal_read(const struct device *dev, uint8_t rdcmd, uint8_t du
 	return 0;
 }
 
-static int check_boundary(off_t offset, size_t len)
+static int check_boundary(const struct device *dev, off_t offset, size_t len)
 {
+	const struct flash_rts5918_dev_data *dev_data = dev->data;
+
 	if (offset < 0) {
 		return -EINVAL;
 	}
 
-	// if (offset >= (DT_REG_ADDR(SOC_NV_FLASH_NODE) + DT_REG_SIZE(SOC_NV_FLASH_NODE))) {
-	// 	return -EINVAL;
-	// }
+	if (dev_data->cs > 1) {
+		return -EIO;
+	}
 
-	// if (len > ((DT_REG_ADDR(SOC_NV_FLASH_NODE) + DT_REG_SIZE(SOC_NV_FLASH_NODE))-offset)) {
-	// 	return -EINVAL;
-	// }
+	const size_t capacity = (1 << dev_data->capacity[dev_data->cs]);
+
+	/* Check whether flash address overflows */
+	if (offset >= capacity) {
+		return -EINVAL;
+	}
+
+	/* Check whether the data length overflows and wraps back */
+	if (len >= capacity - offset) {
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -1332,7 +1347,7 @@ static int flash_rts5918_erase(const struct device *dev, off_t offset, size_t le
 		return -EINVAL;
 	}
 
-	ret = check_boundary(offset, len);
+	ret = check_boundary(dev, offset, len);
 
 	if (ret < 0) {
 		return ret;
@@ -1368,7 +1383,7 @@ static int flash_rts5918_write(const struct device *dev, off_t offset, const voi
 		return 0;
 	}
 
-	ret = check_boundary(offset, len);
+	ret = check_boundary(dev, offset, len);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1394,7 +1409,7 @@ static int flash_rts5918_read(const struct device *dev, off_t offset, void *data
 		return 0;
 	}
 
-	ret = check_boundary(offset, len);
+	ret = check_boundary(dev, offset, len);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1904,6 +1919,7 @@ void flash_rts5918_saf_erase_sector_handler(const struct device *dev, const uint
 					},                                                         \
 			},                                                                         \
 		.cs = 0,                                                                           \
+		.capacity = {26, 24},                                                              \
 	};
 
 #define RTS5918_FLASH_DEVICE_INIT(index)                                                           \
