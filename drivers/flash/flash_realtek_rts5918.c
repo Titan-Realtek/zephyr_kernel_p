@@ -1583,9 +1583,9 @@ static int flash_set_qspi_mode(const struct device *dev)
 	struct flash_rts5918_dev_data *data = dev->data;
 	volatile struct reg_spic_reg *regs = ((struct flash_rts5918_dev_config *)dev->config)->regs;
 	struct qspi_cmd *cmd = &data->command_default;
-	uint8_t mode = 0;
+	struct flash_rts5918_dev_config const *cfg = dev->config;
 
-	switch (mode) {
+	switch (cfg->qspi_mode) {
 	case 0: /* 1-1-1 */
 		cmd->instruction.bus_width = SPIC_CFG_BUS_SINGLE;
 		cmd->address.bus_width = SPIC_CFG_BUS_SINGLE;
