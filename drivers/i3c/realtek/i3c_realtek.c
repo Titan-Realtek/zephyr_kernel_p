@@ -48,6 +48,13 @@ LOG_MODULE_REGISTER(i3c_realtek, CONFIG_I3C_REALTEK_LOG_LEVEL);
 #define I3C_REALTEK_HJ_RETRY_MAX      5
 #define I3C_REALTEK_HJ_RETRY_BACKOFF  K_MSEC(10)
 
+/* Delay before re-sending Hot-Join after the controller re-enables it (ENEC),
+ * so the ENEC frame's STOP completes and the bus settles to the Bus Available
+ * Condition first. The precise electrical wait is enforced in hardware (TAVAL /
+ * bus_available_ns); this just defers past the in-flight CCC.
+ */
+#define I3C_REALTEK_HJ_REENABLE_DELAY K_MSEC(1)
+
 struct i3c_realtek_config {
 	struct i3c_driver_config common;
 	uintptr_t base;
@@ -74,8 +81,12 @@ struct i3c_realtek_data {
 	struct k_sem ccc_end;
 	struct k_sem xfer_end;
 	struct k_sem ibi_sem;
-	int ibi_status;  /* result of the in-flight IBI/HJ/CR, read after ibi_sem */
-	bool hj_pending; /* a hot-join raise is waiting; DAA completion means success */
+	int ibi_status;           /* result of the in-flight IBI/HJ/CR, read after ibi_sem */
+	bool hj_pending;          /* a hot-join raise is waiting; DAA completion means success */
+	bool hj_wanted;           /* target wants to hot-join and has no dynamic address yet */
+	bool hj_enabled_prev;     /* last observed HJ-enable state, to spot DISEC->ENEC */
+	const struct device *dev; /* back-pointer for the deferred HJ-retry work */
+	struct k_work_delayable hj_retry_work; /* re-send HJ after controller re-enables it */
 	uint32_t num_xfer;
 	rtk_i3c_ctx rtk_ctx;
 	rtk_i3c_cfg rtk_cfg;
@@ -469,6 +480,8 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 	case RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_COMPLETE:
 		if (((const struct i3c_realtek_config *)dev->config)->role == RTK_I3C_TAGT) {
 			data->rtk_cfg.tagt_info.dyn_addr = args->dyn_addr;
+			/* Got an address: no need to (re)try Hot-Join anymore. */
+			data->hj_wanted = false;
 			/* Let a registered target app observe its assigned address. */
 			if (data->target_config != NULL) {
 				data->target_config->address = args->dyn_addr;
@@ -527,6 +540,22 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		break;
 	case RTK_I3C_EVENT_COMMAND_COMPLETE:
 		data->num_xfer = args->count;
+		/* Target: an ENEC/DISEC just updated our HJ-enable state (done_isr
+		 * refreshed common_cfg.ibi). Per the I3C spec, a target that saw
+		 * DISEC(DISHJ) and still lacks a dynamic address may re-send its
+		 * Hot-Join once ENEC(ENHJ) re-enables it. Detect that disable->enable
+		 * transition and, if we still want to join, defer a HJ retry.
+		 */
+		if (((const struct i3c_realtek_config *)dev->config)->role == RTK_I3C_TAGT) {
+			bool hj_now = data->rtk_cfg.common_cfg.ibi.enable_hj;
+
+			if (!data->hj_enabled_prev && hj_now && data->hj_wanted &&
+			    data->rtk_cfg.tagt_info.dyn_addr == 0U) {
+				k_work_reschedule(&data->hj_retry_work,
+						  I3C_REALTEK_HJ_REENABLE_DELAY);
+			}
+			data->hj_enabled_prev = hj_now;
+		}
 		k_sem_give(&data->ccc_end);
 		break;
 	case RTK_I3C_EVENT_IBI_WRITE_COMPLETE:
@@ -963,6 +992,12 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 	 * than IBI_WRITE_COMPLETE (see the ADDRESS_ASSIGNMENT_COMPLETE handler).
 	 */
 	data->hj_pending = is_hj;
+	if (is_hj) {
+		/* Remember we still want to join; used to auto-retry HJ if the
+		 * controller re-enables Hot-Join (ENEC) without assigning an address.
+		 */
+		data->hj_wanted = true;
+	}
 
 	for (int attempt = 0;; attempt++) {
 		ret = i3c_realtek_ibi_raise_once(data, ibi_type, msg_ptr);
@@ -980,6 +1015,29 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret;
+}
+
+/*
+ * Deferred Hot-Join retry. Per the I3C spec a target that received DISEC(DISHJ)
+ * and still needs a dynamic address may re-send its Hot-Join once ENEC(ENHJ)
+ * re-enables it. The re-enable is detected in the CCC callback (ISR context),
+ * which cannot call i3c_ibi_raise() directly (it blocks / takes the bus lock),
+ * so the actual re-raise happens here on the system workqueue.
+ */
+static void i3c_realtek_hj_retry_work(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct i3c_realtek_data *data = CONTAINER_OF(dwork, struct i3c_realtek_data, hj_retry_work);
+	struct i3c_ibi req = {
+		.ibi_type = I3C_IBI_HOTJOIN,
+	};
+
+	/* Skip if an address was assigned between the ENEC and this work running. */
+	if (data->rtk_cfg.tagt_info.dyn_addr != 0U || !data->hj_wanted) {
+		return;
+	}
+
+	(void)i3c_realtek_ibi_raise(data->dev, &req);
 }
 
 /*
@@ -1097,10 +1155,16 @@ static int i3c_realtek_init(const struct device *dev)
 	k_sem_init(&data->ccc_end, 0, 1);
 	k_sem_init(&data->xfer_end, 0, 1);
 	k_sem_init(&data->ibi_sem, 0, 1);
+	k_work_init_delayable(&data->hj_retry_work, i3c_realtek_hj_retry_work);
+	data->dev = dev;
 
 	i3c_realtek_devices[config->instance_id] = dev;
 
 	rtk_i3c_get_config(NULL, &data->rtk_cfg);
+	/* Seed the HJ-enable snapshot from the configured default so the first
+	 * genuine DISEC->ENEC transition (not the boot state) triggers a retry.
+	 */
+	data->hj_enabled_prev = data->rtk_cfg.common_cfg.ibi.enable_hj;
 	data->rtk_cfg.common_cfg.instance_id = config->instance_id;
 	data->rtk_cfg.common_cfg.i3c_freq_hz = config->i3c_freq_hz;
 	data->rtk_cfg.common_cfg.role = config->role;
