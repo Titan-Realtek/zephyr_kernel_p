@@ -1,0 +1,11 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Map the CTS/register-model sample to the Realtek EVB target-mode I3C port.
+ */
+
+/ {
+	aliases {
+		i3c-target-0 = &i3c4;
+	};
+};
