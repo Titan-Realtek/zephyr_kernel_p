@@ -16,7 +16,9 @@
 #include <limits.h>
 
 #ifdef CONFIG_RTK_I3C
-#define MAX_BYFM_NDF 64
+#define MAX_BYFM_NDF      64
+#define I3C_ISR_PARE_MASK (1U << 6)
+#define I3C_ISR_TE_MASK   (0x3fU << 24)
 
 void rtk_i3c_isr(rtk_i3c_ctx *);
 
@@ -1215,9 +1217,15 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 	bool tx_preempt_rx = (ctx->state == STATE_TAGT_PRV_READ && !I3C_MSG_IS_READ(msg->flags) &&
 			      ctx->rx_buffer.msg.count == 0U);
 
-	if (ctx->state == STATE_TAGT_PRV_WRITE && ctx->tx_buffer.msg.data == msg->data &&
-	    ctx->tx_buffer.msg.flags == msg->flags && ctx->tx_buffer.msg.len == msg->len) {
-		xfer_buffer = (rtk_i3c_rx_buffer *)&ctx->tx_buffer;
+	if (ctx->state == STATE_TAGT_PRV_WRITE && !I3C_MSG_IS_READ(msg->flags)) {
+		/* A target application can update its preloaded read response before the
+		 * controller consumes it.  Do not treat the same buffer pointer/length as an
+		 * already-complete transfer: msg.count may already equal msg.len, causing a
+		 * later preload to write zero bytes and leaving stale TXDA data on the bus.
+		 */
+		rtk_i3c_core_flush_tx(ctx->core);
+		ctx->tx_buffer = (rtk_i3c_tx_buffer){0};
+		ctx->state = STATE_TAGT_IDLE;
 	} else if (ctx->state != STATE_TAGT_IDLE && !tx_preempt_rx) {
 		return RTK_I3C_BUSY;
 	}
@@ -1233,9 +1241,14 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 		ctx->state = STATE_TAGT_PRV_READ;
 	} else {
 		ctx->state = STATE_TAGT_PRV_WRITE;
+		/* Target TX is a preload for a future controller read.  Replace any
+		 * unconsumed fallback/previous response bytes instead of appending after them.
+		 */
+		rtk_i3c_core_flush_tx(ctx->core);
 		if ((ret = rtk_i3c_write_fifo(ctx, &xfer_buffer->msg)) < 0) {
 			goto exit;
 		}
+		msg->count = xfer_buffer->msg.count;
 		/* Keep STATE_TAGT_PRV_WRITE so the controller read that drains the
 		 * preloaded FIFO is recognized as a write completion in the DONE ISR.
 		 */
@@ -1758,6 +1771,15 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 	}
 	if ((isr_bits & I3C_ISR_DONE_MASK) && !I3C_ISR_IS_HJorCR(isr_bits)) {
 		rtk_i3c_done_isr(ctx);
+	}
+
+	/* In target mode, PARE/TEx are sticky SDR target error/status latches.
+	 * CTS parity/TE flows depend on that latch surviving into the next transfer
+	 * so hardware can NACK once before the status is consumed.  Do not clear
+	 * those latches in the generic end-of-ISR write-one-to-clear path.
+	 */
+	if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role)) {
+		isr_bits &= ~(I3C_ISR_TE_MASK | I3C_ISR_PARE_MASK);
 	}
 	rtk_i3c_core_clear_isr(ctx->core, isr_bits);
 }
