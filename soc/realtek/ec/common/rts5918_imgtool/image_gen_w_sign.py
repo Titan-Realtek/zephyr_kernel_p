@@ -578,7 +578,7 @@ def calculate_signature(key_index, public_key_bin, secret_key_bin, signature_alg
             error_message += (f"{RESET_TEXT_COLOR}")
             sys.exit(error_message)
 
-        signature = ecdsa_sk.sign_digest_deterministic(image_hash, hashfunc=hashlib.sha384, sigencode=sigencode_der)
+        signature = ecdsa_sk.sign_digest_deterministic(image_hash, hashfunc=hashlib.sha384, sigencode=sigencode_string)
         with open("signature.bin", "wb") as signature_file:
             signature_file.write(signature)
             signature_file.flush()
