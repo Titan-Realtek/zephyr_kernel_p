@@ -250,6 +250,8 @@ typedef enum rtk_i3c_event {
 	RTK_I3C_EVENT_TIMEOUT_DETECTED,            /**< SCL is stuck at the logic high or logic
 						      low level during a transfer. */
 	RTK_I3C_EVENT_ARBITRATE_FAIL,              /**< SDA arbitration fail occurred. */
+	RTK_I3C_EVENT_READ_TERMINATED,             /**< Read transfer terminated via ETM. */
+	RTK_I3C_EVENT_WRITE_TERMINATED,            /**< Write transfer terminated via ETM. */
 	RTK_I3C_EVENT_INTERNAL_ERROR,              /**< An internal error occurred. */
 } rtk_i3c_event;
 
@@ -304,12 +306,57 @@ typedef struct rtk_i3c_tagt_resp_info {
 } rtk_i3c_tagt_resp_info;
 
 /** @brief I3C target characteristics information. */
+/* ---- I3C Early Termination (ETM) types; feature gated by CONFIG_RTK_I3C_ETM ---- */
+
+/** ETM enable/disable capability values (SDR / HDR-DDR). */
+typedef enum rtk_i3c_etm {
+	RTK_I3C_ETM_DISABLE_ALL = 0xFF, /**< Disable all */
+	RTK_I3C_ETM_ENABLE_SDR = 0x01,  /**< Enable SDR */
+	RTK_I3C_ETM_DISABLE_SDR = 0xFE, /**< Disable SDR */
+	RTK_I3C_ETM_ENABLE_DDR = 0x02,  /**< Enable HDR-DDR */
+	RTK_I3C_ETM_DISABLE_DDR = 0xFD, /**< Disable HDR-DDR */
+	RTK_I3C_ETM_ENABLE_ALL = 0x03,  /**< Enable SDR + HDR-DDR */
+} rtk_i3c_etm;
+
+/** ENDXFER CCC (0x12) defining bytes per MIPI I3C spec. */
+typedef enum rtk_i3c_endxfer_byte {
+	RTK_I3C_ENDXFER_SET_CAP = 0xFC,   /**< Set METM capability */
+	RTK_I3C_ENDXFER_SET_PARAM = 0xF7, /**< Set HDR-DDR parameters */
+	RTK_I3C_ENDXFER_ACTIVATE = 0xAA,  /**< Activate ETM */
+} rtk_i3c_endxfer_byte;
+
+/** ETM termination reason carried in rtk_i3c_callback_args.etm_type. */
+typedef enum rtk_i3c_etm_type {
+	RTK_I3C_ETM_NONE = 0,        /**< Not an ETM termination (normal completion) */
+	RTK_I3C_ETM_TRIGGERED = 1,   /**< ETM triggered: CETM timer or registered monitor IBI */
+	RTK_I3C_ETM_NON_MONITOR = 2, /**< IBI from a device not registered as ETM monitor */
+} rtk_i3c_etm_type;
+
+/** User-facing ETM configuration; linked to a transfer / passed to ctrl_etm_enable. */
+typedef struct rtk_i3c_etm_cfg {
+	uint8_t cetm_en: 1;   /**< Enable CETM (controller early termination) */
+	uint8_t cetm_min_len; /**< CETM min length (1-127), must be > 0 */
+	uint8_t cetm_max_len; /**< CETM max length (0-127) */
+	rtk_i3c_etm etm_cap;  /**< Monitor ETM capability (0 = skip ENDXFER, CETM only) */
+	uint8_t metm_crc: 1;  /**< CRC Word follows ET request: 0=No, 1=Yes */
+	uint8_t metm_wr: 1;   /**< HDR Write ETM request: 0=Enable, 1=Disable */
+	uint8_t metm_nack: 1; /**< ACK/NACK capability: 0=Enable, 1=Disable */
+	uint16_t addr;        /**< ENDXFER target: I3C_BRCT_ADDR (0x7E)=broadcast, else directed */
+} rtk_i3c_etm_cfg;
+
+/** Bus-level ETM state flags (in rtk_i3c_ctx). */
+typedef struct rtk_i3c_bus_flags {
+	uint8_t etm_enabled: 1;   /**< ETM has been activated on the bus */
+	uint8_t etm_triggered: 1; /**< ETM event fired; cleanup pending in task context */
+} rtk_i3c_bus_flags;
+
 typedef struct rtk_i3c_tagt_info {
 	rtk_i3c_tagt_char_info char_info; /**< Target characteristics information*/
 	rtk_i3c_tagt_resp_info resp_info; /**< I3C target command response information. */
 	uint8_t dyn_addr;                 /**< dynamic address */
 	uint16_t stc_addr;                /**< static address */
 	bool is_i2c;                      /**< i2c target */
+	bool etm_enable;                  /**< registered as ETM monitor (controller bus table) */
 } rtk_i3c_tagt_info;
 
 /** @brief Arguments that are passed to the user callback when an event occurs.
@@ -325,6 +372,7 @@ typedef struct rtk_i3c_callback_args {
 	uint8_t ccc_id;            /**< The command code of the received command. */
 	rtk_i3c_tagt_char_info *tagt_char_info; /**< Target characteristics
 						   information during DAA phase */
+	rtk_i3c_etm_type etm_type; /**< ETM termination reason; RTK_I3C_ETM_NONE if normal */
 	const void *ctx;                        /**< APP provided context */
 } rtk_i3c_callback_args;
 
@@ -438,6 +486,7 @@ typedef struct rtk_i3c_ctx {
 						  information during DAA phase */
 #endif
 	rtk_i3c_cfg *cfg;
+	volatile rtk_i3c_bus_flags bus_flags; /**< Bus-level state flags (ETM). */
 } rtk_i3c_ctx;
 
 /**
@@ -528,10 +577,23 @@ int rtk_i3c_ctrl_xfer(rtk_i3c_ctx *ctx, const rtk_i3c_tagt *tagt, uint8_t i3c_mo
  * @param addr Target address to probe
  * @param i3c_mode Transfer mode (RTK_I3C_I2C for legacy I2C, RTK_I3C_SDR_MODE for I3C)
  * @retval 0 target ACKed (present)
- * @retval RTK_I3C_XFER_TERMINATION target NACKed (absent)
+ * @retval RTK_I3C_ADDR_NACK target NACKed (absent)
  * @return other negative status on error
  */
 int rtk_i3c_ctrl_probe(rtk_i3c_ctx *ctx, uint8_t addr, uint8_t i3c_mode);
+
+/**
+ * @brief Configure/activate Early Termination (ETM) on the bus (controller).
+ *
+ * Programs CETM (controller early termination) and, if requested, sends the
+ * ENDXFER CCC to register monitor ETM capability. Only built when
+ * CONFIG_RTK_I3C_ETM is enabled.
+ *
+ * @param ctx Pointer to I3C context
+ * @param etm_cfg ETM configuration
+ * @return Status code
+ */
+int rtk_i3c_ctrl_etm_enable(rtk_i3c_ctx *ctx, rtk_i3c_etm_cfg *etm_cfg);
 
 /**
  * @brief Read IBI data. Only for controller
@@ -620,5 +682,10 @@ int rtk_i3c_tagt_deinit(rtk_i3c_ctx *ctx);
 #define RTK_I3C_NOT_ENABLED STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000a)
 
 #define RTK_I3C_TIMEOUT STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000b)
+
+#define RTK_I3C_ADDR_NACK       STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000c)
+#define RTK_I3C_ARB_FAIL        STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000d)
+#define RTK_I3C_XFER_TERMINATED STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000e)
+#define RTK_I3C_ETM_VERIFY_FAIL STATUS_CONSTRUCT(SEVERITY_ERROR, SOURCE_RTK_I3C, 0x000f)
 
 #endif /* RTK_I3C_H_ */

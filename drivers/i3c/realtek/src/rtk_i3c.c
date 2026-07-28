@@ -333,6 +333,16 @@ static int rtk_i3c_write_data_frame(rtk_i3c_ctx *ctx, rtk_i3c_msg msg, bool is_e
 		msg_count += msg.len;
 		msg.data += msg.len;
 		msg.count = 0;
+#ifdef CONFIG_RTK_I3C_ETM
+		/* Remote side terminated the transfer mid-way (ETM). */
+		rtk_i3c_core_set_intr(ctx->core, false);
+		if (ctx->bus_flags.etm_triggered) {
+			ctx->bus_flags.etm_triggered = 0;
+			rtk_i3c_core_set_intr(ctx->core, true);
+			return RTK_I3C_XFER_TERMINATED;
+		}
+		rtk_i3c_core_set_intr(ctx->core, true);
+#endif
 	}
 
 	ret = msg_count;
@@ -372,6 +382,7 @@ static bool rtk_i3c_is_ccc_supported(uint8_t id)
 	case I3C_CCC_DRCT_GETPID:
 	case I3C_CCC_DRCT_GETBCR:
 	case I3C_CCC_DRCT_GETDCR:
+	case I3C_CCC_DRCT_GETSTATUS:
 	case I3C_CCC_DRCT_ENDXFER:
 		return true;
 	default:
@@ -1024,6 +1035,12 @@ int rtk_i3c_ctrl_xfer(rtk_i3c_ctx *ctx, const rtk_i3c_tagt *tagt, uint8_t i3c_mo
 	}
 	/* Disable nack isr to ensure the message flow is not interrupted */
 	rtk_i3c_core_set_rxnak_isr(ctx->core, false);
+	/* Poll SDA arbitration loss here instead of via the target-oriented DAF
+	 * ISR (which would wrongly reset our controller state). Clear any stale
+	 * DAF latch first so the check below reflects only this transfer.
+	 */
+	rtk_i3c_core_set_daf_isr(ctx->core, false);
+	rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_DAF_MASK);
 
 	if (tagt == NULL) {
 		goto exit;
@@ -1059,15 +1076,39 @@ int rtk_i3c_ctrl_xfer(rtk_i3c_ctx *ctx, const rtk_i3c_tagt *tagt, uint8_t i3c_mo
 		ret = RTK_I3C_XFER_TERMINATION;
 		goto exit_nack;
 	}
+	if (rtk_i3c_core_get_daf(ctx->core)) {
+		/* A target won SDA arbitration (e.g. raised an IBI just as we issued
+		 * START): the controller lost the bus. Report a retryable arbitration
+		 * failure so the caller can retry the transfer.
+		 */
+		restart = true;
+		LOG_ERR("Controller %d arbitration fail (addr 0x%02x)\n",
+			ctx->cfg->common_cfg.instance_id, tagt->addr);
+		ret = RTK_I3C_ARB_FAIL;
+		goto exit_nack;
+	}
 
 exit:
 	ret = 0;
+#ifdef CONFIG_RTK_I3C_ETM
+	/* If ETM fired during this transfer, report it terminated instead of
+	 * completing normally. Guard against the ISR racing the flag with intr off.
+	 */
+	rtk_i3c_core_set_intr(ctx->core, false);
+	if (ctx->bus_flags.etm_triggered) {
+		ctx->bus_flags.etm_triggered = 0;
+		do_complete = false;
+		ret = RTK_I3C_XFER_TERMINATED;
+	}
+	rtk_i3c_core_set_intr(ctx->core, true);
+#endif
 	if (do_complete && rtk_i3c_complete_xfer(ctx, i3c_mode, restart) != 0) {
 		ret = RTK_I3C_TIMEOUT;
 	}
 
 exit_nack:
 	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
+	rtk_i3c_core_set_daf_isr(ctx->core, true);
 	if (ret < 0) {
 		rtk_i3c_core_flush_all(ctx->core);
 	}
@@ -1096,6 +1137,13 @@ int rtk_i3c_ctrl_probe(rtk_i3c_ctx *ctx, uint8_t addr, uint8_t i3c_mode)
 	 * status (rxnak ISR disabled) until either a byte arrives (ACK) or the frame
 	 * is NACKed (no device). Checking rxnak only after the read is issued avoids
 	 * the false-ACK seen when it is sampled too early.
+	 *
+	 * A 1-byte read (rather than an address-only frame) is used deliberately:
+	 * the arriving byte is a definite ACK signal, so ACK/NACK is unambiguous on
+	 * this IP. An address-only probe has no positive ACK signal and depends on
+	 * rxnak being latched before completion, which is unreliable here (early
+	 * sampling / complete_xfer timing out on a NACK). The extra dummy byte only
+	 * occurs during a manual scan, not in normal (MCTP) traffic.
 	 */
 	rtk_i3c_init_xfer(ctx, i3c_mode);
 	ctx->state = STATE_CTRL_PRV_READ;
@@ -1120,7 +1168,7 @@ int rtk_i3c_ctrl_probe(rtk_i3c_ctx *ctx, uint8_t addr, uint8_t i3c_mode)
 	if (rtk_i3c_core_get_rxnak(ctx->core)) {
 		/* NACK: no device at this address. HW ends the frame itself. */
 		rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_RXNAK_MASK);
-		ret = RTK_I3C_XFER_TERMINATION;
+		ret = RTK_I3C_ADDR_NACK;
 		goto exit;
 	}
 	if (rtk_i3c_core_get_rx_fifo_len(ctx->core) < 1U) {
@@ -1145,6 +1193,148 @@ exit:
 
 	return ret;
 }
+
+#ifdef CONFIG_RTK_I3C_ETM
+/* ENDXFER CCC handshake phases used to configure Monitor ETM (METM). */
+typedef enum rtk_i3c_etm_phase {
+	RTK_I3C_ETM_PHASE0 = 0, /**< ENDXFER 0xFC - set METM capability */
+	RTK_I3C_ETM_PHASE1 = 1, /**< ENDXFER 0xF7 - set parameters */
+	RTK_I3C_ETM_PHASE2 = 2, /**< ENDXFER 0xAA - activate */
+} rtk_i3c_etm_phase;
+
+/* Send one ENDXFER CCC (broadcast defining byte + optional directed param). */
+static int rtk_i3c_endxfer(rtk_i3c_ctx *ctx, rtk_i3c_endxfer_byte df, uint8_t param, uint16_t addr)
+{
+	if (addr == I3C_BRCT_ADDR) {
+		uint8_t data[2] = {(uint8_t)df, param};
+		rtk_i3c_msg msg = {.data = data, .len = 2, .flags = RTK_I3C_WRITE};
+		rtk_i3c_ccc ccc = {
+			.id = I3C_CCC_BRCT_ENDXFER, .msg = &msg, .num_tagts = 0, .tagt = NULL};
+
+		return rtk_i3c_do_ccc(ctx, &ccc, RTK_I3C_SDR_MODE, true);
+	} else {
+		uint8_t df_byte = (uint8_t)df;
+		uint8_t param_byte = param;
+		rtk_i3c_msg bcast_msg = {.data = &df_byte, .len = 1, .flags = RTK_I3C_WRITE};
+		rtk_i3c_msg drct_msg = {.data = &param_byte, .len = 1, .flags = RTK_I3C_WRITE};
+		rtk_i3c_tagt tagt = {.addr = (uint8_t)addr, .msg = &drct_msg};
+		rtk_i3c_ccc ccc = {.id = I3C_CCC_DRCT_ENDXFER,
+				   .msg = &bcast_msg,
+				   .num_tagts = 1,
+				   .tagt = &tagt};
+
+		return rtk_i3c_do_ccc(ctx, &ccc, RTK_I3C_SDR_MODE, true);
+	}
+}
+
+/* Directed ENDXFER GET: read back one byte for verification. */
+static int rtk_i3c_endxfer_read(rtk_i3c_ctx *ctx, rtk_i3c_endxfer_byte df, uint8_t *out,
+				uint16_t addr)
+{
+	uint8_t df_byte = (uint8_t)df;
+	rtk_i3c_msg bcast_msg = {.data = &df_byte, .len = 1, .flags = RTK_I3C_WRITE};
+	rtk_i3c_msg drct_msg = {.data = out, .len = 1, .flags = RTK_I3C_READ};
+	rtk_i3c_tagt tagt = {.addr = (uint8_t)addr, .msg = &drct_msg};
+	rtk_i3c_ccc ccc = {
+		.id = I3C_CCC_DRCT_ENDXFER, .msg = &bcast_msg, .num_tagts = 1, .tagt = &tagt};
+
+	return rtk_i3c_do_ccc(ctx, &ccc, RTK_I3C_SDR_MODE, true);
+}
+
+/* Configure Monitor ETM for one ENDXFER phase, verifying the readback on a
+ * directed target.
+ */
+static int rtk_i3c_ctrl_metm_enable(rtk_i3c_ctx *ctx, rtk_i3c_etm_cfg *etm_cfg,
+				    rtk_i3c_etm_phase phase)
+{
+	rtk_i3c_endxfer_byte df = 0;
+	uint8_t param = 0, readback = 0, expected = 0;
+	bool need_verify = false;
+	bool is_directed = (etm_cfg->addr != I3C_BRCT_ADDR);
+	int ret;
+
+	switch (phase) {
+	case RTK_I3C_ETM_PHASE0:
+		df = RTK_I3C_ENDXFER_SET_CAP;
+		param = (uint8_t)etm_cfg->etm_cap;
+		break;
+	case RTK_I3C_ETM_PHASE1:
+		df = RTK_I3C_ENDXFER_SET_PARAM;
+		expected = param = (!etm_cfg->metm_crc << 7 | 1 << 6) | (!etm_cfg->metm_wr << 5) |
+				   (!etm_cfg->metm_nack << 4);
+		need_verify = is_directed;
+		break;
+	case RTK_I3C_ETM_PHASE2:
+		df = RTK_I3C_ENDXFER_ACTIVATE;
+		param = 0xAA;
+		expected = (!etm_cfg->metm_crc << 7 | 1 << 6) | (!etm_cfg->metm_wr << 5) |
+			   (!etm_cfg->metm_nack << 4);
+		need_verify = is_directed;
+		break;
+	default:
+		return RTK_I3C_INVAL_PARAM;
+	}
+
+	if (((ret = rtk_i3c_endxfer(ctx, df, param, etm_cfg->addr)) != 0) || !need_verify) {
+		goto exit;
+	}
+	if ((ret = rtk_i3c_endxfer_read(ctx, df, &readback, etm_cfg->addr)) != 0) {
+		goto exit;
+	}
+	if (readback != expected) {
+		LOG_ERR("ETM phase %d verify failed (expected=0x%02x got=0x%02x)\n", phase,
+			expected, readback);
+		ret = RTK_I3C_ETM_VERIFY_FAIL;
+	}
+
+exit:
+	ctx->ccc_id = I3C_CCC_INVALID_ID;
+	return ret;
+}
+
+int rtk_i3c_ctrl_etm_enable(rtk_i3c_ctx *ctx, rtk_i3c_etm_cfg *etm_cfg)
+{
+	ASSERT(ctx != NULL && etm_cfg != NULL);
+	RETURN_ERROR_IF((etm_cfg->cetm_en == 1 && etm_cfg->cetm_min_len == 0) ||
+				(etm_cfg->cetm_en == 0 &&
+				 (etm_cfg->cetm_min_len != 0 || etm_cfg->cetm_max_len != 0)),
+			RTK_I3C_INVAL_PARAM);
+	int ret;
+
+	if (etm_cfg->cetm_en || etm_cfg->etm_cap != RTK_I3C_ETM_DISABLE_ALL) {
+		if (etm_cfg->cetm_en) {
+			/* Controller Early Termination: length window, no ENDXFER phases. */
+			rtk_i3c_core_set_cetm(ctx->core, etm_cfg->cetm_en, etm_cfg->cetm_min_len,
+					      etm_cfg->cetm_max_len);
+		} else {
+			/* Monitor ETM: register capability via ENDXFER (phase 0). */
+			if ((ret = rtk_i3c_ctrl_metm_enable(ctx, etm_cfg, RTK_I3C_ETM_PHASE0)) !=
+			    0) {
+				goto exit_error;
+			}
+			rtk_i3c_bus_set_etm_enable_by_addr(ctx, (uint8_t)etm_cfg->addr);
+		}
+		rtk_i3c_core_set_etm_cap(ctx->core, etm_cfg->etm_cap);
+		ctx->bus_flags.etm_enabled = true;
+	} else {
+		/* Disable path: run the ENDXFER param/activate phases and clear METM. */
+		if ((ret = rtk_i3c_ctrl_metm_enable(ctx, etm_cfg, RTK_I3C_ETM_PHASE1)) != 0) {
+			goto exit_error;
+		}
+		if ((ret = rtk_i3c_ctrl_metm_enable(ctx, etm_cfg, RTK_I3C_ETM_PHASE2)) != 0) {
+			goto exit_error;
+		}
+		rtk_i3c_core_set_metm(ctx->core, etm_cfg->metm_crc, etm_cfg->metm_wr,
+				      etm_cfg->metm_nack);
+	}
+
+	return 0;
+
+exit_error:
+	rtk_i3c_core_set_cetm(ctx->core, 0, 0, 0);
+	return ret;
+}
+#endif /* CONFIG_RTK_I3C_ETM */
 
 #ifdef CONFIG_RTK_I3C_IBI
 
@@ -1202,11 +1392,61 @@ int rtk_i3c_tagt_init(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 	return 0;
 }
 
+#ifdef CONFIG_RTK_I3C_ETM
+/**
+ * @brief Abort the in-flight transfer and return to the role's idle state.
+ *
+ * Used when the remote side terminates a transfer mid-way (ETM). Flush the
+ * FIFOs for the current direction, drop the pending buffer, clear all pending
+ * interrupt status (ISR/ISR1) and put the instance back to idle. Must be
+ * called with interrupts masked by the caller.
+ */
+void rtk_i3c_abort_xfer(rtk_i3c_ctx *ctx)
+{
+	rtk_i3c_state state = ctx->state;
+
+	if (I3C_STATE_IS_PRV_WRITE(state)) {
+		/* flush tx last to avoid bytes transferring before abort */
+		ctx->tx_buffer = (rtk_i3c_tx_buffer){0};
+		rtk_i3c_core_flush_tx(ctx->core);
+		if (state == STATE_CTRL_PRV_WRITE) {
+			rtk_i3c_core_flush_byfm(ctx->core);
+		}
+	} else if (I3C_STATE_IS_READ(state)) {
+		if (state == STATE_CTRL_PRV_READ) {
+			/* flush rx first to avoid rxne fired again */
+			rtk_i3c_core_flush_rx(ctx->core);
+			rtk_i3c_core_flush_byfm(ctx->core);
+		}
+		ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
+	}
+
+	rtk_i3c_core_clear_isr(ctx->core, UINT32_MAX);
+	rtk_i3c_core_clear_isr1(ctx->core, UINT32_MAX);
+	ctx->state =
+		I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role) ? STATE_CTRL_IDLE : STATE_TAGT_IDLE;
+}
+#endif /* CONFIG_RTK_I3C_ETM */
+
 int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 {
 	ASSERT(ctx != NULL && msg != NULL);
 	rtk_i3c_rx_buffer *xfer_buffer = NULL;
 	int ret = 0;
+
+#ifdef CONFIG_RTK_I3C_ETM
+	/* The controller terminated the previous transfer mid-way (ETM): drop the
+	 * aborted buffer and report the termination before starting a new xfer.
+	 */
+	rtk_i3c_core_set_intr(ctx->core, false);
+	if (ctx->bus_flags.etm_triggered) {
+		ctx->bus_flags.etm_triggered = 0;
+		rtk_i3c_abort_xfer(ctx);
+		rtk_i3c_core_set_intr(ctx->core, true);
+		return RTK_I3C_XFER_TERMINATED;
+	}
+	rtk_i3c_core_set_intr(ctx->core, true);
+#endif
 
 	/* A write (TX preload / read response) may preempt an armed-but-idle RX
 	 * buffer: the target keeps RX armed between transfers, but when the
@@ -1326,8 +1566,26 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 		is_read = false;
 	}
 
+	/* Poll for address NACK / arbitration loss inline: this runs under the
+	 * caller's irq_lock, so the async rxnak/DAF ISRs cannot report them here.
+	 * Disable the rxnak ISR and clear any stale DAF latch first. The target DAF
+	 * ISR is left enabled -- it still handles arbitration lost *after* start.
+	 */
+	rtk_i3c_core_set_rxnak_isr(ctx->core, false);
+	rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_DAF_MASK);
+
 	if ((ret = rtk_i3c_write_addr_frame(ctx, addr, is_read, false, RTK_I3C_SDR_MODE)) < 0) {
-		return ret;
+		goto exit_error;
+	}
+	if (rtk_i3c_core_get_rxnak(ctx->core)) {
+		LOG_ERR("Target %d IBI addr 0x%02x NACK\n", ctx->cfg->common_cfg.instance_id, addr);
+		ret = RTK_I3C_ADDR_NACK;
+		goto exit_error;
+	}
+	if (rtk_i3c_core_get_daf(ctx->core)) {
+		LOG_ERR("Target %d IBI arbitration fail\n", ctx->cfg->common_cfg.instance_id);
+		ret = RTK_I3C_ARB_FAIL;
+		goto exit_error;
 	}
 
 	ctx->state = STATE_TAGT_IBI;
@@ -1342,13 +1600,24 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 		if ((ret = rtk_i3c_write_data_frame(ctx, xfer_buffer->msg, false,
 						    RTK_I3C_SDR_MODE)) < 0) {
 			LOG_DBG("with %zu bytes\n", msg->len);
-			return ret;
+			goto exit_error;
 		}
 		xfer_buffer->msg.count = ret;
 	}
 	rtk_i3c_core_start_xfer(ctx->core);
+	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
 
 	return 0;
+
+exit_error:
+	/* Drop the partially-queued IBI frame and clear the NACK latch so a retry
+	 * starts clean; restore idle state and re-enable the rxnak ISR.
+	 */
+	rtk_i3c_core_flush_all(ctx->core);
+	rtk_i3c_core_clear_isr(ctx->core, I3C_ISR_RXNAK_MASK);
+	ctx->state = STATE_TAGT_IDLE;
+	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
+	return ret;
 }
 
 #endif /* CONFIG_RTK_I3C_IBI */
@@ -1457,6 +1726,19 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 	}
 }
 
+#ifdef CONFIG_RTK_I3C_ETM
+/* True if an Early-Termination status bit is latched in the current ISR pass.
+ * ISR/ISR1 stay latched until the end-of-ISR clear, so re-reading here matches
+ * what the dispatcher saw. Lets the RXNE/DAF handlers defer to rtk_i3c_etm_isr()
+ * without threading extra parameters through them.
+ */
+static __always_inline bool rtk_i3c_etm_pending(rtk_i3c_ctx *ctx)
+{
+	return I3C_ISR_GET_ETM_BITS(rtk_i3c_core_get_isr(ctx->core),
+				    rtk_i3c_core_get_isr1(ctx->core)) != 0;
+}
+#endif /* CONFIG_RTK_I3C_ETM */
+
 /**
  * @brief The rxne isr is generated when rx fifo is not empty.
  *        It handles the following event:
@@ -1504,6 +1786,17 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 		return;
 	}
 #endif
+
+#ifdef CONFIG_RTK_I3C_ETM
+	/* ETM terminated this read in the same ISR pass: the partial data is now in
+	 * ctx->rx_buffer; skip READ_COMPLETE so rtk_i3c_etm_isr() reports
+	 * READ_TERMINATED instead.
+	 */
+	if (rtk_i3c_etm_pending(ctx)) {
+		return;
+	}
+#endif
+
 	rtk_i3c_callback_args args = {
 		.ctx = ctx->cfg->common_cfg.ctx,
 	};
@@ -1717,6 +2010,15 @@ static __always_inline void rtk_i3c_daf_isr(rtk_i3c_ctx *ctx)
 {
 	LOG_DBG("\n");
 
+#ifdef CONFIG_RTK_I3C_ETM
+	/* In an early-termination flow the DAF is part of the ETM handshake, not a
+	 * lost-arbitration IBI; leave state/FIFOs for rtk_i3c_etm_isr() to handle.
+	 */
+	if (rtk_i3c_etm_pending(ctx)) {
+		return;
+	}
+#endif
+
 	/* For Target: DAF means arbitration lost during IBI transmission.
 	 * Discard the partially-queued IBI frame (BYFM) and payload (TXDA) so a
 	 * retry starts from a clean FIFO instead of appending to stale bytes.
@@ -1735,6 +2037,44 @@ static __always_inline void rtk_i3c_daf_isr(rtk_i3c_ctx *ctx)
 }
 #endif /* CONFIG_RTK_I3C_IBI */
 
+#ifdef CONFIG_RTK_I3C_ETM
+/**
+ * @brief Early-Termination (ETM) ISR: report WETM/RETM/ECOM/METM terminations.
+ *
+ * Runs after the RXNE read, so any partial data is already in ctx->rx_buffer.
+ * Fires WRITE_TERMINATED / READ_TERMINATED, and on a monitor-triggered
+ * termination tears down the bus ETM state.
+ */
+static inline void rtk_i3c_etm_isr(rtk_i3c_ctx *ctx, uint32_t etm_bits)
+{
+	rtk_i3c_callback_args args = {
+		.ctx = ctx->cfg->common_cfg.ctx,
+	};
+
+	if ((etm_bits & I3C_ISR_WETM_MASK) || I3C_STATE_IS_PRV_WRITE(ctx->state) ||
+	    ctx->state == STATE_TAGT_IBI) {
+		args.event = RTK_I3C_EVENT_WRITE_TERMINATED;
+	}
+	if ((etm_bits & (I3C_ISR_RETM_MASK | I3C_ISR_ECOM_MASK)) || I3C_STATE_IS_READ(ctx->state)) {
+		args.event = RTK_I3C_EVENT_READ_TERMINATED;
+	}
+	if (etm_bits & I3C_ISR1_METM_MASK) {
+		args.etm_type = RTK_I3C_ETM_TRIGGERED;
+		if (ctx->bus_flags.etm_enabled) {
+			ctx->bus_flags.etm_enabled = 0;
+			rtk_i3c_core_disable_etm(ctx->core);
+			rtk_i3c_bus_clear_etm_enable(ctx);
+		}
+	}
+
+	if ((args.event != RTK_I3C_EVENT_NONE || args.etm_type != RTK_I3C_ETM_NONE) &&
+	    ctx->cfg->common_cfg.callback != NULL) {
+		ctx->cfg->common_cfg.callback(&args);
+	}
+	ctx->bus_flags.etm_triggered = 1;
+}
+#endif /* CONFIG_RTK_I3C_ETM */
+
 /**
  * @brief I3C interrupt service routine. This function dispatch
  *        different event to sub isr handlers.
@@ -1744,8 +2084,15 @@ static __always_inline void rtk_i3c_daf_isr(rtk_i3c_ctx *ctx)
 void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 {
 	uint32_t isr_bits = rtk_i3c_core_get_isr(ctx->core);
+#ifdef CONFIG_RTK_I3C_ETM
+	uint32_t isr1_bits = rtk_i3c_core_get_isr1(ctx->core);
+	uint32_t etm_bits = I3C_ISR_GET_ETM_BITS(isr_bits, isr1_bits);
 
+	LOG_DBG("Instance %d, ISR=0x%08" PRIx32 ", ISR1=0x%08" PRIx32 "\n",
+		ctx->cfg->common_cfg.instance_id, isr_bits, isr1_bits);
+#else
 	LOG_DBG("Instance %d, ISR=0x%08" PRIx32 "\n", ctx->cfg->common_cfg.instance_id, isr_bits);
+#endif
 
 #ifdef CONFIG_RTK_I3C_IBI
 	/* IBI type interrupts (independent handlers) */
@@ -1769,9 +2116,20 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 	if (isr_bits & I3C_ISR_RXNAK_MASK) {
 		rtk_i3c_rxnak_isr(ctx);
 	}
+#ifdef CONFIG_RTK_I3C_ETM
+	/* An ETM termination and DONE can co-assert; prefer the ETM path so the
+	 * transfer is reported as terminated (not normally completed).
+	 */
+	if (etm_bits) {
+		rtk_i3c_etm_isr(ctx, etm_bits);
+	} else if ((isr_bits & I3C_ISR_DONE_MASK) && !I3C_ISR_IS_HJorCR(isr_bits)) {
+		rtk_i3c_done_isr(ctx);
+	}
+#else
 	if ((isr_bits & I3C_ISR_DONE_MASK) && !I3C_ISR_IS_HJorCR(isr_bits)) {
 		rtk_i3c_done_isr(ctx);
 	}
+#endif
 
 	/* In target mode, PARE/TEx are sticky SDR target error/status latches.
 	 * CTS parity/TE flows depend on that latch surviving into the next transfer
@@ -1782,5 +2140,8 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 		isr_bits &= ~(I3C_ISR_TE_MASK | I3C_ISR_PARE_MASK);
 	}
 	rtk_i3c_core_clear_isr(ctx->core, isr_bits);
+#ifdef CONFIG_RTK_I3C_ETM
+	rtk_i3c_core_clear_isr1(ctx->core, isr1_bits);
+#endif
 }
 #endif /* CONFIG_RTK_I3C */

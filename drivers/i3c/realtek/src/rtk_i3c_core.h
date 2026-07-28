@@ -24,6 +24,15 @@
 #define I3C_ISR_RXNAK_MASK (1 << 7)
 #define I3C_ISR_DAF_MASK   (1 << 15)
 
+/* Early Termination status bits (used only when CONFIG_RTK_I3C_ETM). */
+#define I3C_ISR_ECOM_MASK  (1 << 4)  /* controller read early-completed by target */
+#define I3C_ISR_WETM_MASK  (1 << 11) /* write early termination */
+#define I3C_ISR_RETM_MASK  (1 << 12) /* read early termination */
+#define I3C_ISR1_METM_MASK (1 << 8)  /* monitor early termination (ISR1 register) */
+#define I3C_ISR_GET_ETM_BITS(isr_bits, isr1_bits)                                                  \
+	(((isr_bits) & (I3C_ISR_ECOM_MASK | I3C_ISR_WETM_MASK | I3C_ISR_RETM_MASK)) |              \
+	 ((isr1_bits) & (I3C_ISR1_METM_MASK)))
+
 #define I3C_ISR_IS_HJorCR(isr_bits)                                                                \
 	(((isr_bits) == (I3C_ISR_HJ_MASK | I3C_ISR_DONE_MASK)) ||                                  \
 	 ((isr_bits) == (I3C_ISR_CR_MASK | I3C_ISR_DONE_MASK)))
@@ -1492,6 +1501,59 @@ static inline uint32_t rtk_i3c_core_get_isr(rtk_i3c_core *core)
 static inline void rtk_i3c_core_set_rxnak_isr(rtk_i3c_core *core, bool enable)
 {
 	rtk_core_write32_mask(&core->imr, 7, 7, enable);
+}
+
+/* SDA arbitration-fail (DAF) status (risr bit 15) and its interrupt mask. */
+static inline uint32_t rtk_i3c_core_get_daf(rtk_i3c_core *core)
+{
+	return rtk_core_read32_mask(&core->risr, 15, 15);
+}
+
+static inline void rtk_i3c_core_set_daf_isr(rtk_i3c_core *core, bool enable)
+{
+	rtk_core_write32_mask(&core->imr, 15, 15, enable);
+}
+
+/* ---- Early Termination (ETM) accessors; only used when CONFIG_RTK_I3C_ETM ---- */
+static inline uint32_t rtk_i3c_core_get_isr1(rtk_i3c_core *core)
+{
+	return rtk_core_read32(&core->isr1);
+}
+
+static inline void rtk_i3c_core_clear_isr1(rtk_i3c_core *core, uint32_t bit_mask)
+{
+	rtk_core_write32(&core->icr1, bit_mask);
+}
+
+/* CETM (Controller Early Termination): terminate a read within [min,max] len. */
+static inline void rtk_i3c_core_set_cetm(rtk_i3c_core *core, uint8_t cetm_en, uint8_t cetm_min_len,
+					 uint8_t cetm_max_len)
+{
+	rtk_core_write32_mask(&core->etm, 16, 16, cetm_en);
+	if (cetm_en) {
+		rtk_core_write32_mask(&core->etm, 0, 7, cetm_min_len);
+		rtk_core_write32_mask(&core->etm, 8, 15, cetm_max_len);
+	}
+}
+
+/* METM (Monitoring device ETM) parameter byte for the ENDXFER CCC. */
+static inline void rtk_i3c_core_set_metm(rtk_i3c_core *core, uint8_t metm_crc, uint8_t metm_wr,
+					 uint8_t metm_nack)
+{
+	uint8_t param =
+		(uint8_t)((!metm_crc << 7) | (1 << 6) | (!metm_wr << 5) | (!metm_nack << 4));
+	rtk_core_write32_mask(&core->endxfer, 0, 7, param);
+}
+
+static inline void rtk_i3c_core_set_etm_cap(rtk_i3c_core *core, rtk_i3c_etm metm_cap)
+{
+	rtk_core_write32_mask(&core->endxfer, 16, 23, (uint32_t)metm_cap);
+}
+
+static inline void rtk_i3c_core_disable_etm(rtk_i3c_core *core)
+{
+	rtk_core_write32_mask(&core->etm, 16, 16, 0);        /* disable CETM */
+	rtk_core_write32_mask(&core->endxfer, 16, 23, 0xFF); /* METM_CAP = disable all */
 }
 
 static inline void rtk_i3c_core_set_ibi_isr(rtk_i3c_core *core, bool enable)

@@ -46,10 +46,10 @@ static inline uint8_t rtk_core_read8(volatile void *addr)
 	return *(volatile uint8_t *)addr;
 }
 
-static inline uint32_t rtk_core_read32(volatile void *addr)
+static inline uint32_t rtk_core_read32(const volatile void *addr)
 {
-	LOG_COSIM("config_read (32'h%08" PRIx32 ");\n", (uint32_t)addr);
-	return *(volatile uint32_t *)addr;
+	LOG_COSIM("config_read (32'h%08" PRIx32 ");\n", (uint32_t)(uintptr_t)addr);
+	return *(const volatile uint32_t *)addr;
 }
 
 static inline uint32_t rtk_core_read32_mask(volatile void *addr, uint8_t bit_low, uint8_t bit_high)
