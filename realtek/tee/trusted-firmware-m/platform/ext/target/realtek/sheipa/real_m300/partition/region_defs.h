@@ -97,7 +97,22 @@
 /* Secure regions */
 #define S_IMAGE_PRIMARY_AREA_OFFSET \
              (S_IMAGE_PRIMARY_PARTITION_OFFSET + BL2_HEADER_SIZE)
-#define S_CODE_START    (S_ROM_ALIAS(S_IMAGE_PRIMARY_AREA_OFFSET))
+/*
+ * The secure runtime image is a plain MCUboot image and has NO 0x20-byte RLTK
+ * header - that wrapper exists only on the BL2 image (consumed by the bootROM).
+ * It therefore must NOT inherit BL2's RLTK offset: S_ROM_ALIAS_BASE is
+ * 0x20000020, and using it here would link the vector table at 0x2000B420.
+ * On Cortex-M33 VTOR[6:0] are RES0, so writing 0x2000B420 is silently masked
+ * to 0x2000B400 - shifting every exception vector down by 8 slots. The first
+ * SVC (TFM_SVC_SPM_INIT) then vectors into the HardFault stub and TF-M reports
+ * "FATAL ERROR: Reserved Exception 0x0000000B" with all fault-status registers
+ * clear. Link the S image from the clean 128-byte-aligned SRAM flash-alias base
+ * 0x20000000 instead (exactly what boot_hal_bl2.c already uses for NS), so the
+ * vector table lands at 0x2000B400. This is fully decoupled from BL2:
+ * S_ROM_ALIAS_BASE, BL2_CODE_START and bl2 -L are unchanged.
+ */
+#define S_IMAGE_LOAD_BASE   (0x20000000)
+#define S_CODE_START    (S_IMAGE_LOAD_BASE + S_IMAGE_PRIMARY_AREA_OFFSET)
 #define S_CODE_SIZE     (IMAGE_S_CODE_SIZE)
 #define S_CODE_LIMIT    (S_CODE_START + S_CODE_SIZE - 1)
 
@@ -105,7 +120,7 @@
 #define S_CODE_VECTOR_TABLE_SIZE    (0x230)
 
 #define S_DATA_START    (S_RAM_ALIAS(0x0))
-#define S_DATA_SIZE     (TOTAL_RAM_SIZE / 2)
+#define S_DATA_SIZE     (0xD000)      /* 52 KB */
 #define S_DATA_LIMIT    (S_DATA_START + S_DATA_SIZE - 1)
 
 /* Non-secure regions */
@@ -115,12 +130,12 @@
 #define NS_CODE_SIZE    (IMAGE_NS_CODE_SIZE)
 #define NS_CODE_LIMIT   (NS_CODE_START + NS_CODE_SIZE - 1)
 
-#define NS_DATA_START   (NS_RAM_ALIAS(TOTAL_RAM_SIZE / 2))
+#define NS_DATA_START   (NS_RAM_ALIAS(0x0))
 #if defined(PSA_API_TEST_NS) && !defined(PSA_API_TEST_IPC)
 #define DEV_APIS_TEST_NVMEM_REGION_SIZE  0x400
-#define NS_DATA_SIZE    (TOTAL_RAM_SIZE / 2 - DEV_APIS_TEST_NVMEM_REGION_SIZE)
+#define NS_DATA_SIZE    (0x1B000 - DEV_APIS_TEST_NVMEM_REGION_SIZE)
 #else
-#define NS_DATA_SIZE    (TOTAL_RAM_SIZE / 2)
+#define NS_DATA_SIZE    (0x1A000)     /* 104 KB (was 0x1B000; 1K reclaimed for BL2 growth) */
 #endif
 #define NS_DATA_LIMIT   (NS_DATA_START + NS_DATA_SIZE - 1)
 
@@ -129,9 +144,32 @@
             (NS_ROM_ALIAS(NS_IMAGE_PRIMARY_PARTITION_OFFSET))
 #define NS_PARTITION_SIZE (FLASH_NS_PARTITION_SIZE)
 
-/* Secondary partition for new images in case of firmware upgrade */
+/* Secondary partition for new images in case of firmware upgrade.
+ *
+ * IMPORTANT (RTS5918 single-SRAM): this region must NOT be aliased through
+ * NS_ROM_ALIAS_BASE. NS_ROM_ALIAS_BASE was changed 0x10000000 -> 0x20000000 so
+ * that the NS runtime image (VTOR/MSP, SAU NS-code region) resolves to its real
+ * SRAM load address (0x20038000, matching boot_hal_bl2.c NS_SRAM_LOAD_BASE).
+ * But this platform has only ONE 832KB SRAM at 0x20000000; there is no in-SRAM
+ * upgrade slot. Aliasing the secondary partition through the SRAM base put it at
+ *   NS_ROM_ALIAS(0xA8000) = 0x200A8000 .. 0x20144FFF (size 0x9D000)
+ * which (a) overlaps the live NS_DATA SAU region (0x200B5020..0x200CF01F) and
+ * (b) runs past the end of SRAM (0x200D0000). tfm_common_s.ld links
+ * Load$$LR$$LR_SECONDARY_PARTITION$$Base = SECONDARY_PARTITION_START, and
+ * target_cfg.c sau_cfg[] adds an enabled SAU NS region there. Two overlapping
+ * enabled SAU regions make the ARMv8-M attribution unit treat the whole overlap
+ * as SECURE (SAU programming error), so the first NS interrupt-stack push into
+ * NS_DATA faulted with SecureFault AUVIOL (SFSR=0x48, SFAR~=initial MSP).
+ * The secondary/upgrade slot lives in external flash (the legacy 0x10000000
+ * alias), never in the runtime SRAM, so pin it to its own base. This is a
+ * dead/non-decoding address at runtime; the ER_SECONDARY_PARTITION region is
+ * UNINIT (address-space bookkeeping only), so no data is placed there - exactly
+ * how it sat harmlessly before NS_ROM_ALIAS_BASE was moved. Decoupled the same
+ * way S_IMAGE_LOAD_BASE is decoupled from S_ROM_ALIAS_BASE above.
+ */
+#define SECONDARY_PARTITION_ALIAS_BASE (0x10000000)
 #define SECONDARY_PARTITION_START \
-            (NS_ROM_ALIAS(S_IMAGE_SECONDARY_PARTITION_OFFSET))
+            (SECONDARY_PARTITION_ALIAS_BASE + S_IMAGE_SECONDARY_PARTITION_OFFSET)
 #define SECONDARY_PARTITION_SIZE (FLASH_S_PARTITION_SIZE + \
                                   FLASH_NS_PARTITION_SIZE)
 
@@ -142,7 +180,7 @@
 #define BL2_CODE_LIMIT    (BL2_CODE_START + BL2_CODE_SIZE - 1)
 
 #define BL2_DATA_START    (S_RAM_ALIAS(0x0))
-#define BL2_DATA_SIZE     (TOTAL_RAM_SIZE)
+#define BL2_DATA_SIZE     (0xA000)      /* 40 KB, transient (overlaps S data) */
 #define BL2_DATA_LIMIT    (BL2_DATA_START + BL2_DATA_SIZE - 1)
 #endif /* BL2 */
 

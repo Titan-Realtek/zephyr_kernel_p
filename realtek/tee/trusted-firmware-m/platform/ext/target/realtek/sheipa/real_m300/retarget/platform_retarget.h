@@ -40,7 +40,7 @@
 #define GPIO1_BASE_NS          0x40101000
 #define GPIO2_BASE_NS          0x40102000
 #define GPIO3_BASE_NS          0x40103000
-#define UART0_BASE_NS          0x40040000
+#define UART0_BASE_NS          0x40251600  /* rts5918 ns16550 debug UART0 (was AN521 0x40040000) */
 #define UART1_BASE_NS          0x40201000
 #define UART2_BASE_NS          0x40202000
 #define UART3_BASE_NS          0x40203000
@@ -70,7 +70,7 @@
 #define GPIO1_BASE_S           0x50101000
 #define GPIO2_BASE_S           0x50102000
 #define GPIO3_BASE_S           0x50103000
-#define UART0_BASE_S           0x50200000
+#define UART0_BASE_S           0x40251600  /* rts5918 has no 0x5xxx secure alias; same phys UART (was 0x50200000) */
 #define UART1_BASE_S           0x50201000
 #define UART2_BASE_S           0x50202000
 #define UART3_BASE_S           0x50203000

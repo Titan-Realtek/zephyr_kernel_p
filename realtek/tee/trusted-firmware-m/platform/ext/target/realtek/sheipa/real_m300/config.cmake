@@ -10,10 +10,12 @@
 list(APPEND TFM_EXTRA_GENERATED_FILE_LIST_PATH ${CMAKE_CURRENT_LIST_DIR}/generated_file_list.yaml)
 
 if(BL2)
-    set(BL2_TRAILER_SIZE 0x10000 CACHE STRING "Trailer size")
+    # OVERWRITE_ONLY: trailer only holds boot magic + image-OK flags, so a few
+    # sectors suffice. Was 0x10000 (64K) which wasted ~56K of every code slot.
+    set(BL2_TRAILER_SIZE 0x2000 CACHE STRING "Trailer size")
 else()
     #No header if no bootloader, but keep IMAGE_CODE_SIZE the same
-    set(BL2_TRAILER_SIZE 0x10400 CACHE STRING "Trailer size")
+    set(BL2_TRAILER_SIZE 0x2400 CACHE STRING "Trailer size")
 endif()
 
 # Platform-specific configurations

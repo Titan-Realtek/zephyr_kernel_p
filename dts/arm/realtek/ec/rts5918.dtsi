@@ -39,13 +39,30 @@
 		};
 	};
 
-	flash0: flash@20000400 {
-		reg = <0x20000400 0x6FC00>;
+	/* 832K single-SRAM map (see TF-M flash_layout.h / region_defs.h),
+	 * S_ROM_ALIAS_BASE = 0x20000020 (RLTK hdr occupies 0x20000000..0x20000020).
+	 * BL2 grew 0xA000->0xB000 (signed bl2 = 0xA057 overran the old 0xA000 slot);
+	 * everything above it moved up 0x1000 and NS data shrank 1K to hold the top:
+	 *   BL2 code  0x20000020 .. 0x2000B020 (44K)
+	 *   S   code  0x2000B020 .. 0x20038020 (180K)
+	 *   NS  code  0x20038020 .. 0x200A8020 (448K)  <- flash0 (this image)
+	 *   S   data  0x200A8020 .. 0x200B5020 (52K)
+	 *   NS  data  0x200B5020 .. 0x200CF020 (104K)  <- sram0
+	 * flash0 = NS signed-image slot = NS_PARTITION_START (region_defs.h) = 0x20038000.
+	 * This MUST be the signed-image base (where BL2 loads it), NOT the post-header
+	 * vector address: Zephyr's CONFIG_ROM_START_OFFSET=0x400 already reserves the
+	 * MCUboot header, so vectors land at base+0x400 = 0x20038400 = NS_CODE_START =
+	 * VTOR_NS. Putting 0x20038400 here double-counted the 0x400 header and linked
+	 * the image 0x400 above where BL2 loads it (INVEP on NS entry, see failed26).
+	 * size = FLASH_NS_PARTITION_SIZE = 0x70000 (448K). zephyr.bin (~395K) fits.
+	 */
+	flash0: flash@20038000 {
+		reg = <0x20038000 0x70000>;
 	};
 
-	sram0: memory@20070000 {
+	sram0: memory@200b5020 {
 		compatible = "mmio-sram";
-		reg = <0x20070000 0x2FF00>;
+		reg = <0x200B5020 0x1A000>;
 	};
 
 	clocks {

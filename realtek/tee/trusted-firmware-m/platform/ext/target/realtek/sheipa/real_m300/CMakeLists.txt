@@ -109,6 +109,7 @@ target_compile_definitions(platform_s
 if(BL2)
     target_sources(platform_bl2
         PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/boot_hal_bl2.c
             retarget/platform_retarget_dev.c
             cmsis_core/system_core_init.c
             cmsis_drivers/Driver_Flash.c

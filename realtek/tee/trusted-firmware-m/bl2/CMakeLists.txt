@@ -64,6 +64,83 @@ target_compile_definitions(bl2
 
 add_convert_to_bin_target(bl2)
 
+################## Realtek RTS5918 bootROM image header + sign #################
+# The RTS5918 bootROM loads the first-stage image (BL2) from SPI flash into
+# SRAM and verifies its RLTK header + signature before jumping in. Wrap the
+# raw bl2.bin with that header + an ECDSA-P384 signature so the bootROM will
+# accept and launch it. Mirrors the Zephyr application path in
+# soc/realtek/ec/common/CMakeLists.txt (image_gen_w_sign.py).
+#
+# Defaults to ON only for realtek platforms; a no-op for every other TF-M
+# target.
+if (TFM_PLATFORM MATCHES "realtek")
+    set(_RTK_SIGN_BL2_DEFAULT ON)
+else()
+    set(_RTK_SIGN_BL2_DEFAULT OFF)
+endif()
+
+set(RTK_RTS5918_SIGN_BL2 ${_RTK_SIGN_BL2_DEFAULT} CACHE BOOL
+    "Wrap bl2.bin with the RTS5918 bootROM header + ECDSA signature")
+
+# The imgtool lives in the Zephyr tree, three levels up from the TF-M root
+# (…/zephyr_kernel_p/realtek/tee/trusted-firmware-m -> …/zephyr_kernel_p).
+set(RTK_RTS5918_IMGTOOL_DIR
+    "${CMAKE_SOURCE_DIR}/../../../soc/realtek/ec/common/rts5918_imgtool"
+    CACHE PATH "Directory containing image_gen_w_sign.py, pk.bin, sk.bin")
+
+# !!! IMPORTANT !!! Load address the bootROM copies the image to; execution
+# jumps to (load_addr + 32-byte RLTK header), so this MUST equal BL2's
+# vector-table link address minus 0x20 (RLTK_HDR_SIZE).
+#
+# RTS5918 executes from the single 0x20000000 SRAM. BL2 links at
+# S_ROM_ALIAS_BASE = 0x20000020 (flash_layout.h), so:
+#   -L = 0x20000000  ->  exec = 0x20000000 + 0x20 = 0x20000020 = BL2_CODE_START
+# The 0x20-byte RLTK header occupies 0x20000000..0x20000020.
+# Keep -L and S_ROM_ALIAS_BASE in sync or the signed image will not boot.
+set(RTK_RTS5918_BL2_LOAD_ADDRESS "0x20000000" CACHE STRING
+    "bootROM load address for the BL2 image (must equal BL2 link address - 0x20)")
+
+# Header SPI settings, matched to boards/realtek/rts5918_bison_defconfig
+# (DIV8 -> 6.25 MHz -> 3; normal read -> 0x03).
+set(RTK_RTS5918_SPI_FREQ  "3"    CACHE STRING "SPI freq: 0=50M 1=25M 2=12.5M 3=6.25M")
+set(RTK_RTS5918_SPI_RDCMD "0x03" CACHE STRING "SPI read cmd: 0x03/0x3B/0x6B")
+
+if (RTK_RTS5918_SIGN_BL2)
+    find_package(Python3)
+
+    get_target_property(_bl2_bin_dir bl2 RUNTIME_OUTPUT_DIRECTORY)
+
+    if (NOT EXISTS ${RTK_RTS5918_IMGTOOL_DIR}/image_gen_w_sign.py)
+        message(WARNING
+            "RTK_RTS5918_SIGN_BL2 is ON but image_gen_w_sign.py was not found at "
+            "${RTK_RTS5918_IMGTOOL_DIR}. Set -DRTK_RTS5918_IMGTOOL_DIR=<path>.")
+    endif()
+
+    message(STATUS
+        "RTS5918 BL2 signing: load address = ${RTK_RTS5918_BL2_LOAD_ADDRESS} "
+        "(exec = load + 0x20 = 0x20000020 = S_ROM_ALIAS_BASE). Keep -L and "
+        "S_ROM_ALIAS_BASE (flash_layout.h) in sync or the signed image will not boot.")
+
+    # Runs after bl2.bin is produced by add_convert_to_bin_target()'s bl2_bin
+    # target. The imgtool drops intermediate files (hdr/hash/tlv/signature) in
+    # the CWD, so run it inside the bin/ output dir.
+    add_custom_command(TARGET bl2_bin POST_BUILD
+        COMMENT "Signing bl2.bin -> bl2.rts5918.bin with the RTS5918 bootROM image tool"
+        WORKING_DIRECTORY ${_bl2_bin_dir}
+        COMMAND ${Python3_EXECUTABLE} ${RTK_RTS5918_IMGTOOL_DIR}/image_gen_w_sign.py
+            -I ${_bl2_bin_dir}/bl2.bin
+            -O ${_bl2_bin_dir}/bl2.rts5918.bin
+            -L ${RTK_RTS5918_BL2_LOAD_ADDRESS}
+            -F ${RTK_RTS5918_SPI_FREQ}
+            -R ${RTK_RTS5918_SPI_RDCMD}
+            -H SHA2_384
+            -s ${RTK_RTS5918_IMGTOOL_DIR}/sk.bin
+            -p ${RTK_RTS5918_IMGTOOL_DIR}/pk.bin
+            -k SHA2_384
+            -S ECDSA
+    )
+endif()
+
 ############################### BOOT HAL # #####################################
 
 add_library(bl2_hal INTERFACE)

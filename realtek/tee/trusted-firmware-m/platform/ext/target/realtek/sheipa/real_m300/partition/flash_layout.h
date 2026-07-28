@@ -60,8 +60,8 @@
  */
 
 /* Size of a Secure and of a Non-secure image */
-#define FLASH_S_PARTITION_SIZE          (0x80000) /* S partition: 512 KB */
-#define FLASH_NS_PARTITION_SIZE         (0x80000) /* NS partition: 512 KB */
+#define FLASH_S_PARTITION_SIZE          (0x2D000) /* S partition: 180 KB */
+#define FLASH_NS_PARTITION_SIZE         (0x70000) /* NS partition: 448 KB */
 
 #if (FLASH_S_PARTITION_SIZE > FLASH_NS_PARTITION_SIZE)
 #define FLASH_MAX_PARTITION_SIZE FLASH_S_PARTITION_SIZE
@@ -75,7 +75,7 @@
 
 /* Flash layout info for BL2 bootloader */
 /* Same as FLASH0_BASE_S */
-#define FLASH_BASE_ADDRESS              (0x10000000)
+#define FLASH_BASE_ADDRESS              (0x000)
 
 /* Offset and size definitions of the flash partitions that are handled by the
  * bootloader. The image swapping is done between IMAGE_PRIMARY and
@@ -83,7 +83,11 @@
  * swapping.
  */
 #define FLASH_AREA_BL2_OFFSET      (0x0)
-#define FLASH_AREA_BL2_SIZE        (0x80000) /* 512 KB */
+/* 0xB000 (44K): signed bl2.rts5918.bin = 0xA057 (raw 0x9F30 + RLTK hdr 0x20 +
+ * ECDSA TLV) overran the old 0xA000 by 0x57 into the S slot. Grew BL2 by one
+ * 0x1000 sector; the SRAM cost is reclaimed by trimming NS data 0x1B000->0x1A000
+ * (see S/NS_RAM_ALIAS_BASE below and rts5918.dtsi sram0). */
+#define FLASH_AREA_BL2_SIZE        (0xB000)
 
 #if !defined(MCUBOOT_IMAGE_NUMBER) || (MCUBOOT_IMAGE_NUMBER == 1)
 /* Secure + Non-secure image primary slot */
@@ -218,15 +222,43 @@
 #define TFM_OTP_NV_COUNTERS_BACKUP_AREA_ADDR (TFM_OTP_NV_COUNTERS_AREA_ADDR + \
                                               TFM_OTP_NV_COUNTERS_AREA_SIZE)
 
-/* Use SRAM1 memory to store Code data */
-#define S_ROM_ALIAS_BASE  (0x10000000)
-#define NS_ROM_ALIAS_BASE (0x10000000)
+/* Code images loaded into the single 0x20000000 SRAM.
+ * BL2's vector table (BL2_CODE_START = S_ROM_ALIAS(FLASH_AREA_BL2_OFFSET=0))
+ * must land exactly where the bootROM jumps after loading the signed image:
+ *   jump = RTK_RTS5918_BL2_LOAD_ADDRESS (-L) + RLTK_HDR_SIZE(0x20)
+ *        = 0x20000000 + 0x20 = 0x20000020
+ * The 0x20-byte RLTK header occupies 0x20000000..0x20000020.
+ * Keep -L (bl2/CMakeLists.txt) = S_ROM_ALIAS_BASE - 0x20 or BL2 faults
+ * before the first BOOT_LOG.
+ */
+#define S_ROM_ALIAS_BASE  (0x20000020)
+/* NS code lives in the SAME single physical SRAM as everything else. BL2
+ * (boot_hal_bl2.c NS_SRAM_LOAD_BASE) loads the NS image to
+ *   0x20000000 + FLASH_AREA_1_OFFSET(0x38000) = 0x20038000
+ * and the Zephyr NS image is linked/signed for that 0x20000000 base. This SoC
+ * has NO separate 0x10000000 NS ROM alias - S/NS are distinguished purely by
+ * SAU/MPC attributes on the one 0x20000000 SRAM. The old 0x10000000 value is
+ * stale (boot_hal_bl2.c says so): it made NS_PARTITION_START/NS_CODE_START and
+ * memory_regions.non_secure_code_start resolve to 0x10038000, so SPM's
+ * tfm_hal_get_ns_MSP() dereferenced a non-decoding address and faulted with an
+ * imprecise BusFault during nspm ctx init / NS-agent (pid 2) launch. Use the
+ * real SRAM base so NS_PARTITION_START = 0x20038000 (matches BL2's load dst)
+ * and NS_CODE_START = 0x20038400 (matches the 128-aligned NS vector table).
+ */
+#define NS_ROM_ALIAS_BASE (0x20000000)
 
-/* FIXME: Use SRAM2 memory to store RW data */
-#define S_RAM_ALIAS_BASE  (0x38000000)
-#define NS_RAM_ALIAS_BASE (0x28000000)
+/* RW data lives in the SAME physical SRAM, stacked ABOVE the loaded code
+ * images (BL2 44K + S 180K + NS 448K, base 0x20000020, end at 0x200A8020):
+ *   S  data: 0x200A8020 .. 0x200B5020 (52K)    [BL2 data overlaps here, transient]
+ *   NS data: 0x200B5020 .. 0x200CF020 (104K)
+ * All within the single 832K SRAM (0x20000000 .. 0x200D0000), ~4K headroom.
+ * Bases moved up 0x1000 vs the original map because BL2 grew 0xA000->0xB000;
+ * NS data shrank 0x1B000->0x1A000 (region_defs.h) so the top stays at 0x200CF020.
+ */
+#define S_RAM_ALIAS_BASE  (0x200A8020)
+#define NS_RAM_ALIAS_BASE (0x200B5020)
 
 #define TOTAL_ROM_SIZE FLASH_TOTAL_SIZE
-#define TOTAL_RAM_SIZE (0x200000)     /* 2 MB */
+#define TOTAL_RAM_SIZE (0xD0000)      /* 832 KB physical SRAM */
 
 #endif /* __FLASH_LAYOUT_H__ */

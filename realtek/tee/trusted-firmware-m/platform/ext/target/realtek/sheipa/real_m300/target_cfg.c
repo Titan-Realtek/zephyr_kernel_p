@@ -70,7 +70,28 @@ extern ARM_DRIVER_MPC Driver_SRAM1_MPC, Driver_SRAM2_MPC;
 
 /* Define Peripherals NS address range for the platform */
 #define PERIPHERALS_BASE_NS_START (0x40000000)
-#define PERIPHERALS_BASE_NS_END   (0x4FFFFFFF)
+/* NS peripheral window spans 0x40000000..0x50080000; RLAR limit is the last
+ * inclusive address (0x50080000 - 1), 32-byte aligned. */
+#define PERIPHERALS_BASE_NS_END   (0x5007FFFF)
+
+/* Memory-mapped SPI-flash-controller apertures the NS EC FW accesses directly
+ * (HwFlashInterface.c: PVT_FLASH_ADDRESS=0x60000000 = SPIC1 window,
+ * MCM_FLASH_ADDRESS=0x80000000 = SPIC2 window). The whole 512 MB controller
+ * aperture must be NS, not just the eflash device size. Without these SAU NS
+ * regions an NS read (e.g. eRPMC init) hits SAU-default Secure and faults
+ * AUVIOL (SFSR=0x48, SFAR=0x8000xxxx). See failed27. */
+/* SPIC1 (PVT, 0x60000000..0x7FFFFFFF) and SPIC2 (MCM, 0x80000000..0x9FFFFFFF)
+ * are contiguous, so cover both flash-controller apertures with ONE SAU region
+ * to conserve SAU slots (only 8 total). */
+#define SPIC_BASE_NS    (0x60000000)
+#define SPIC_LIMIT_NS   (0x9FFFFFFF)
+
+/* Battery-backed RAM (bb-ram@20200000, 0x100 bytes) — the NS EC FW reads/writes
+ * it directly (bbram_rts5918_read); it sits above SRAM at 0x20200000, outside
+ * the 0x40000000 peripheral window, so it needs its own SAU NS region or NS
+ * hits SAU-default Secure -> AUVIOL (SFAR=0x202000xx). See failed28. */
+#define BBRAM_BASE_NS   (0x20200000)
+#define BBRAM_LIMIT_NS  (0x202000FF)
 
 /* Enable system reset request for CPU 0 */
 #define ENABLE_CPU0_SYSTEM_RESET_REQUEST (1U << 4U)
@@ -313,6 +334,16 @@ const struct sau_cfg_t sau_cfg[] = {
         UART2_BASE_NS,
 #endif
         PERIPHERALS_BASE_NS_END,
+        false,
+    },
+    {
+        SPIC_BASE_NS,
+        SPIC_LIMIT_NS,
+        false,
+    },
+    {
+        BBRAM_BASE_NS,
+        BBRAM_LIMIT_NS,
         false,
     },
 #ifdef BL2
