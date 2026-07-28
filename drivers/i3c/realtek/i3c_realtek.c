@@ -124,6 +124,20 @@ static int i3c_realtek_err_to_errno(int ret)
 		return -ENOSPC;
 	case RTK_I3C_TIMEOUT:
 		return -ETIMEDOUT;
+	case RTK_I3C_ADDR_NACK:
+	case RTK_I3C_ARB_FAIL:
+		/* Address NACK or lost SDA arbitration. Both are retryable: a target
+		 * IBI/HJ that is NACKed or preempted should be retried (the IBI/HJ
+		 * retry loop keys on -EAGAIN), and a probe/scan sees a non-zero result
+		 * (device absent). A private-transfer NACK uses RTK_I3C_XFER_TERMINATION,
+		 * not this code.
+		 */
+		return -EAGAIN;
+	case RTK_I3C_XFER_TERMINATED:
+	case RTK_I3C_ETM_VERIFY_FAIL:
+		/* Transfer cut short mid-way (early termination). Semantics refined
+		 * when the ETM feature is ported. */
+		return -EIO;
 	default:
 		return -EIO;
 	}

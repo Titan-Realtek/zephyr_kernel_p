@@ -43,6 +43,16 @@ config RTK_I3C_DMA
 	  Enable the RTK I3C DMA data path. Leave disabled unless the SoC DMA
 	  integration and DMA shim are available.
 
+config RTK_I3C_ETM
+	bool "Enable RTK I3C Early Termination (ETM)"
+	depends on RTK_I3C_IBI
+	help
+	  Enable I3C Early Termination (CETM/METM) and the ENDXFER CCC, used to
+	  end a transfer mid-way (e.g. variable-length reads or a monitoring
+	  device interrupting a transaction). Leave disabled unless required
+	  (e.g. MCTP-over-I3C); when disabled the interrupt and transfer paths
+	  are unchanged.
+
 config RTK_I3C_CORE_LOG
 	bool "Enable RTK I3C core log"
 	default y

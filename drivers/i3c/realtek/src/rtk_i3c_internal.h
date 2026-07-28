@@ -155,6 +155,13 @@ enum rtk_i3c_req_type {
 
 uint8_t rtk_i3c_util_calc_parity(uint8_t dyn_addr);
 int rtk_i3c_bus_get_bcr_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_adr);
+int rtk_i3c_bus_get_dcr_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr);
+#ifdef CONFIG_RTK_I3C_ETM
+void rtk_i3c_bus_set_etm_enable_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr);
+bool rtk_i3c_bus_get_etm_enable_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr);
+void rtk_i3c_bus_clear_etm_enable(rtk_i3c_ctx *ctx);
+void rtk_i3c_abort_xfer(rtk_i3c_ctx *ctx);
+#endif
 
 /**
  * @brief get 48 bits value from big endian

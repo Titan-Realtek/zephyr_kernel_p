@@ -200,6 +200,61 @@ int rtk_i3c_bus_get_bcr_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr)
 	return tagt_table[tagt_id].info.char_info.bcr;
 }
 
+/* Return the DCR of the target at dyn_addr, e.g. to identify MCTP-over-I3C
+ * endpoints by their DCR. Negative RTK_I3C_TAGT_NOT_FOUND if not present.
+ */
+int rtk_i3c_bus_get_dcr_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr)
+{
+	ASSERT(ctx != NULL && ctx->cfg != NULL && ctx->cfg->tagt_table != NULL);
+	rtk_i3c_bus_tagt_item *tagt_table = ctx->cfg->tagt_table;
+	int tagt_id = -1;
+	if ((tagt_id = rtk_i3c_bus_find_tagt_by_addr(tagt_table, dyn_addr)) < 0) {
+		LOG_ERR("Target addr: %" PRIx8 " not found!\n", dyn_addr);
+		return RTK_I3C_TAGT_NOT_FOUND;
+	}
+
+	return tagt_table[tagt_id].info.char_info.dcr;
+}
+
+#ifdef CONFIG_RTK_I3C_ETM
+/* Mark target(s) as registered ETM monitors. dyn_addr 0 or 0x7E = all active. */
+void rtk_i3c_bus_set_etm_enable_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr)
+{
+	rtk_i3c_bus_tagt_item *tagt_table = ctx->cfg->tagt_table;
+
+	if (dyn_addr == 0 || dyn_addr == I3C_BRCT_ADDR) {
+		for (int i = 0; i < RTK_I3C_MAX_TAGT_COUNT; i++) {
+			if (tagt_table[i].active) {
+				tagt_table[i].info.etm_enable = true;
+			}
+		}
+	} else {
+		int id = rtk_i3c_bus_find_tagt_by_addr(tagt_table, dyn_addr);
+
+		if (id >= 0) {
+			tagt_table[id].info.etm_enable = true;
+		}
+	}
+}
+
+bool rtk_i3c_bus_get_etm_enable_by_addr(rtk_i3c_ctx *ctx, uint8_t dyn_addr)
+{
+	rtk_i3c_bus_tagt_item *tagt_table = ctx->cfg->tagt_table;
+	int id = rtk_i3c_bus_find_tagt_by_addr(tagt_table, dyn_addr);
+
+	return id >= 0 && tagt_table[id].info.etm_enable;
+}
+
+void rtk_i3c_bus_clear_etm_enable(rtk_i3c_ctx *ctx)
+{
+	rtk_i3c_bus_tagt_item *tagt_table = ctx->cfg->tagt_table;
+
+	for (int i = 0; i < RTK_I3C_MAX_TAGT_COUNT; i++) {
+		tagt_table[i].info.etm_enable = false;
+	}
+}
+#endif /* CONFIG_RTK_I3C_ETM */
+
 int rtk_i3c_bus_reattach_tagt(rtk_i3c_ctx *ctx, uint8_t old_da, uint8_t new_da, uint16_t new_sa)
 {
 	ASSERT(ctx != NULL && ctx->cfg != NULL && ctx->cfg->tagt_table != NULL);
