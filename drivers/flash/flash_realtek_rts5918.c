@@ -1112,6 +1112,8 @@ static inline const struct qspi_cmd_set *flash_get_qspi_cmd(const struct device 
 
 static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte_cmd)
 {
+	int ret = 0;
+
 	if (is_4byte_cmd) {
 		switch (cmd_set->program) {
 		case SPI_NOR_CMD_PP:
@@ -1124,6 +1126,7 @@ static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte
 			cmd_set->program = SPI_NOR_CMD_PP_1_4_4_4B;
 			break;
 		default:
+			ret = -EINVAL;
 			break;
 		}
 		switch (cmd_set->read) {
@@ -1146,6 +1149,7 @@ static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte
 			cmd_set->read = SPI_NOR_CMD_4READ_4B;
 			break;
 		default:
+			ret = -EINVAL;
 			break;
 		}
 	} else {
@@ -1160,6 +1164,7 @@ static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte
 			cmd_set->program = SPI_NOR_CMD_PP_1_4_4;
 			break;
 		default:
+			ret = -EINVAL;
 			break;
 		}
 		switch (cmd_set->read) {
@@ -1182,9 +1187,12 @@ static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte
 			cmd_set->read = SPI_NOR_CMD_4READ;
 			break;
 		default:
+			ret = -EINVAL;
 			break;
 		}
 	}
+
+	return ret;
 }
 
 static int flash_program_page(const struct device *dev, uint32_t address, const uint8_t *data,
@@ -1202,7 +1210,7 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 	const struct qspi_cmd_set *cmd = flash_get_qspi_cmd(dev);
 
 	/* Convert to 3-byte / 4-byte mode command */
-	flash_convert_command_set(cmd, is_4byte_address(address));
+	flash_convert_command_set((struct qspi_cmd_set *)cmd, is_4byte_address(address));
 
 	/* Enter usermode */
 	spic_usermode(dev);
@@ -1418,7 +1426,7 @@ static int flash_rts5918_read(const struct device *dev, off_t offset, void *data
 	const struct qspi_cmd_set *cmd = flash_get_qspi_cmd(dev);
 
 	/* Convert to 3-byte / 4-byte mode command */
-	flash_convert_command_set(cmd, is_4byte_address(offset));
+	flash_convert_command_set((struct qspi_cmd_set *)cmd, is_4byte_address(offset));
 
 	/* Enter user mode */
 	spic_usermode(dev);
