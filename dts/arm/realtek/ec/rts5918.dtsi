@@ -40,12 +40,11 @@
 	};
 
 	flash0: flash@2000B400 {
-		reg = <0x2000B400 0x64C00>;
+		reg = <0x20000400 0x6FC00>;
 	};
 
 	sram0: memory@20070000 {
 		compatible = "mmio-sram";
-//		reg = <0x20070000 0x30000>;
 		reg = <0x20070000 0x2FF00>;
 	};
 
