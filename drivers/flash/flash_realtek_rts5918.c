@@ -271,7 +271,8 @@ static inline void spic_automode(const struct device *dev)
 {
 	const struct flash_rts5918_dev_config *config = dev->config;
 	volatile struct reg_spic_reg *spic_reg = config->regs;
-
+	*(volatile uint32_t *)(0x402301e4) = 0x0ul;
+	*(volatile uint32_t *)(0x402301e8) = 0x102ul;
 	spic_reg->CTRL0 &= ~SPIC_CTRL0_USERMD;
 
 
@@ -817,16 +818,16 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 
 err_exit:
 	flash_write_disable(dev);
-	// if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
-	// 	config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
-	// 	(void)spic_write(dev, command, NULL, &len);
+	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
+		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
+		(void)spic_write(dev, command, NULL, &len);
 
-	// 	ret = flash_wait_till_ready(dev);
-	// 	if (ret != 0) {
-	// 		printk("Enable 4byte addr: 4BA failed %d!", ret);
-	// 		//return ret;
-	// 	}				
-	// }		
+		ret = flash_wait_till_ready(dev);
+		if (ret != 0) {
+			printk("Enable 4byte addr: 4BA failed %d!", ret);
+			//return ret;
+		}				
+	}		
 
 	// if ((uintptr_t)spic_reg == 0x40000000) {
 	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
@@ -1575,9 +1576,10 @@ static int flash_rts5918_init(const struct device *dev)
 				return ret;
 			}
 
-			/* Set 4-byte mode to CS0 flash */
-			*(volatile uint32_t *)(0x402301e4) = 0x0ul;
-			*(volatile uint32_t *)(0x402301e8) = 0x102ul;	
+			/* Set 4-byte mode to CS1 flash */
+			*(volatile uint32_t *)(0x402301e4) = 0x102ul;
+			*(volatile uint32_t *)(0x402301e8) = 0x0ul;				
+
 			ret = flash_enter_4byte(dev);
 			printk("flash_enter_4byte!\r\n");
 			if (ret != 0) {
@@ -1585,9 +1587,9 @@ static int flash_rts5918_init(const struct device *dev)
 				return ret;
 			}				
 
-			/* Switch back to default CS1 */
-			*(volatile uint32_t *)(0x402301e4) = 0x102ul;
-			*(volatile uint32_t *)(0x402301e8) = 0x0ul;	
+			/* Switch back to default CS0 */
+			*(volatile uint32_t *)(0x402301e4) = 0x0ul;
+			*(volatile uint32_t *)(0x402301e8) = 0x102ul;	
 
 			/* Configure SPIC in Quad Read/Program mode */
 			spic_reg->VALIDCMD |= SPIC_AUTO_VALIDCMD_RD_QUAD_O | SPIC_AUTO_VALIDCMD_WR_QUAD_I | SPIC_AUTO_VALIDCMD_DUM_EN;
