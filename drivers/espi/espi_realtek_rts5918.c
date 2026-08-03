@@ -13,6 +13,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/flash.h>
+#include <zephyr/drivers/flash/rts5918_flash_api.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/clock_control/clock_control_rts5918.h>
 #include <zephyr/logging/log.h>
