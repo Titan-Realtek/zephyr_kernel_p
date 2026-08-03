@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Realtek RTS5918 I3C target used for on-board controller/target validation
+
+compatible: "realtek,rts5918-i3c-target"
+
+include: [i3c-device.yaml]
