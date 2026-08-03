@@ -7,13 +7,14 @@
 #define DT_DRV_COMPAT     realtek_rts5918_flash_controller
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
 
-#define PINCTRL_STATE_EXTALT	PINCTRL_STATE_PRIV_START
-#define PINCTRL_STATE_CS0	(PINCTRL_STATE_PRIV_START + 1U)
-#define PINCTRL_STATE_CS1	(PINCTRL_STATE_PRIV_START + 2U)
+#define PINCTRL_STATE_EXTALT PINCTRL_STATE_PRIV_START
+#define PINCTRL_STATE_CS0    (PINCTRL_STATE_PRIV_START + 1U)
+#define PINCTRL_STATE_CS1    (PINCTRL_STATE_PRIV_START + 2U)
 
 #define FLASH_PAGE_SZ      256
 #define FLASH_WRITE_BLK_SZ DT_PROP(SOC_NV_FLASH_NODE, write_block_size)
-#define FLASH_ERASE_BLK_SZ DT_PROP(SOC_NV_FLASH_NODE, erase_block_size)
+#define FLASH_ERASE_SEC_SZ KB(4)
+#define FLASH_ERASE_BLK_SZ KB(64)
 
 #define LOG_LEVEL CONFIG_FLASH_LOG_LEVEL
 #include <zephyr/logging/log.h>
@@ -39,12 +40,12 @@ LOG_MODULE_REGISTER(flash_rts5918);
 #define FLASH_CMD_EXTNADDR_RDEAR 0xC8 /* Read extended address register */
 
 /* W25Q-style Security Register vendor commands */
-#define FLASH_CMD_RDSECREG       0x48 /* Read Security Registers  (24-bit addr + 8 dummy) */
-#define FLASH_CMD_PPSECREG       0x42 /* Program Security Registers (24-bit addr, up to 256B) */
-#define FLASH_CMD_ERSECREG       0x44 /* Erase Security Registers (24-bit addr, erases a 256B page) */
+#define FLASH_CMD_RDSECREG 0x48 /* Read Security Registers  (24-bit addr + 8 dummy) */
+#define FLASH_CMD_PPSECREG 0x42 /* Program Security Registers (24-bit addr, up to 256B) */
+#define FLASH_CMD_ERSECREG 0x44 /* Erase Security Registers (24-bit addr, erases a 256B page) */
 
-#define SEC_REG_PAGE_BYTES       256
-#define SEC_REG_READ_DUMMY       8
+#define SEC_REG_PAGE_BYTES 256
+#define SEC_REG_READ_DUMMY 8
 
 #define MODE(x)    (((x) << 6) & SPIC_CTRL0_SCPH)
 #define TMOD(x)    (((x) << SPIC_CTRL0_TMOD_Pos) & SPIC_CTRL0_TMOD_Msk)
@@ -60,8 +61,8 @@ LOG_MODULE_REGISTER(flash_rts5918);
 #define TX_NDF(x) (((x) << SPIC_TXNDF_NUM_Pos) & SPIC_TXNDF_NUM_Msk)
 #define RX_NDF(x) (((x) << SPIC_RXNDF_NUM_Pos) & SPIC_RXNDF_NUM_Msk)
 
-#define TIMEOUT_SPICEN  10UL
-#define TIMEOUT_SPIBUSY 10000UL
+#define TIMEOUT_SPICEN      10UL
+#define TIMEOUT_SPIBUSY     10000UL
 #define TIMEOUT_SAFLIMITCNT 100UL
 
 enum {
@@ -137,6 +138,11 @@ struct flash_rts5918_dev_data {
 	uint8_t cs;
 };
 
+static inline const bool is_4byte_address(uint32_t address)
+{
+	return (address >> 24) != 0;
+}
+
 static const uint8_t user_addr_len[] = {
 	[SPIC_CFG_ADDR_SIZE_8] = 1,
 	[SPIC_CFG_ADDR_SIZE_16] = 2,
@@ -169,11 +175,14 @@ static int config_command(struct qspi_cmd *command, uint8_t cmd, uint32_t addr,
 		break;
 	case SPI_NOR_CMD_READ:
 	case SPI_NOR_CMD_READ_FAST:
+	case SPI_NOR_CMD_READ_4B:
 	case SPI_NOR_CMD_SE:
 	case SPI_NOR_CMD_BE:
-case SPI_NOR_CMD_SE_4B:
+	case SPI_NOR_CMD_SE_4B:
+	case SPI_NOR_CMD_BE_4B:
 	case FLASH_CMD_RDSFDP:
 	case SPI_NOR_CMD_PP:
+	case SPI_NOR_CMD_PP_4B:
 	case FLASH_CMD_RDSECREG:
 	case FLASH_CMD_PPSECREG:
 	case FLASH_CMD_ERSECREG:
@@ -255,16 +264,12 @@ static inline void spic_cs_deactivate(const struct device *dev)
 	spic_reg->SER = 0UL;
 }
 
-
-
 static inline void spic_usermode(const struct device *dev)
 {
 	const struct flash_rts5918_dev_config *config = dev->config;
 	volatile struct reg_spic_reg *spic_reg = config->regs;
 
 	spic_reg->CTRL0 |= SPIC_CTRL0_USERMD;
-
-
 }
 
 static inline void spic_automode(const struct device *dev)
@@ -274,8 +279,6 @@ static inline void spic_automode(const struct device *dev)
 	*(volatile uint32_t *)(0x402301e4) = 0x0ul;
 	*(volatile uint32_t *)(0x402301e8) = 0x102ul;
 	spic_reg->CTRL0 &= ~SPIC_CTRL0_USERMD;
-
-
 }
 
 uint32_t SPIC_AutoMode_EnterEngineer(const struct device *dev)
@@ -285,15 +288,15 @@ uint32_t SPIC_AutoMode_EnterEngineer(const struct device *dev)
 
 	spic_usermode(dev);
 
-    spic_reg->VALIDCMD = 0x000007E0;    // Enter Engineer mode
-    spic_reg->VALIDCMD  = 0x00000600;   // Enter Engineer mode
-    spic_reg->VALIDCMD  = 0x00000000;   // enable auto write enable command and read status command
+	spic_reg->VALIDCMD = 0x000007E0; // Enter Engineer mode
+	spic_reg->VALIDCMD = 0x00000600; // Enter Engineer mode
+	spic_reg->VALIDCMD = 0x00000000; // enable auto write enable command and read status command
 
-    if (!(spic_reg->VALIDCMD & 0x80000000ul)) {
-        return 1;
-    }
+	if (!(spic_reg->VALIDCMD & 0x80000000ul)) {
+		return 1;
+	}
 
-    return 0;
+	return 0;
 }
 
 static void spic_prepare_command(const struct device *dev, const struct qspi_cmd *command,
@@ -397,7 +400,7 @@ static int spic_write(const struct device *dev, const struct qspi_cmd *command, 
 {
 	int ret;
 
-	//spic_usermode(dev);
+	// spic_usermode(dev);
 
 	spic_prepare_command(dev, command, *length, 0, COMMAND_WRITE);
 	spic_cs_active(dev);
@@ -406,7 +409,7 @@ static int spic_write(const struct device *dev, const struct qspi_cmd *command, 
 	ret = spic_wait_finish(dev);
 
 	spic_cs_deactivate(dev);
-	//spic_automode(dev);
+	// spic_automode(dev);
 
 	return ret;
 }
@@ -416,7 +419,7 @@ static int spic_read(const struct device *dev, const struct qspi_cmd *command, v
 {
 	int ret;
 
-	//spic_usermode(dev);
+	// spic_usermode(dev);
 	spic_prepare_command(dev, command, 0, *length, COMMAND_READ);
 	spic_cs_active(dev);
 
@@ -424,13 +427,12 @@ static int spic_read(const struct device *dev, const struct qspi_cmd *command, v
 	ret = spic_wait_finish(dev);
 
 	spic_cs_deactivate(dev);
-	//spic_automode(dev);
+	// spic_automode(dev);
 
 	return ret;
 }
 
 static int flash_read_sr(const struct device *dev, uint8_t *val);
-
 
 static int flash_write_enable(const struct device *dev)
 {
@@ -464,10 +466,10 @@ static int flash_write_enable(const struct device *dev)
 	timeout = TIMEOUT_SPIBUSY;
 	do {
 		flash_read_sr(dev, &sr);
-// 		ret = flash_read_sr(dev, &sr);
-// if (ret < 0) {
-// 			return ret;
-// 		}
+		// 		ret = flash_read_sr(dev, &sr);
+		// if (ret < 0) {
+		// 			return ret;
+		// 		}
 		if (!(sr & SPI_NOR_WIP_BIT)) {
 			return 0;
 		}
@@ -477,28 +479,28 @@ static int flash_write_enable(const struct device *dev)
 exit:
 	return ret;
 
-// ret = spic_write(dev, command, 0, &len);
-// 	if (ret < 0) {
-// 		goto exit;
-// 	}
+	// ret = spic_write(dev, command, 0, &len);
+	// 	if (ret < 0) {
+	// 		goto exit;
+	// 	}
 
-// 	/* If it's a sector erase loop, it requires approximately 3000 cycles,
-// 	 * while a program page requires about 40 cycles.
-// 	 */
-// 	timeout = TIMEOUT_SPIBUSY;
-// 	do {
-// 		ret = flash_read_sr(dev, &sr);
-// 		// if (ret < 0) {
-// 		// 	return ret;
-// 		// }
-// 		if (sr & SPI_NOR_WEL_BIT) {
-// 			return 0;
-// 		}
-// 		timeout--;
-// 	} while (timeout > 0);
+	// 	/* If it's a sector erase loop, it requires approximately 3000 cycles,
+	// 	 * while a program page requires about 40 cycles.
+	// 	 */
+	// 	timeout = TIMEOUT_SPIBUSY;
+	// 	do {
+	// 		ret = flash_read_sr(dev, &sr);
+	// 		// if (ret < 0) {
+	// 		// 	return ret;
+	// 		// }
+	// 		if (sr & SPI_NOR_WEL_BIT) {
+	// 			return 0;
+	// 		}
+	// 		timeout--;
+	// 	} while (timeout > 0);
 
-// exit:
-// 	return ret;
+	// exit:
+	// 	return ret;
 }
 
 static int flash_write_disable(const struct device *dev)
@@ -520,10 +522,10 @@ static int flash_write_disable(const struct device *dev)
 	timeout = TIMEOUT_SPIBUSY;
 	do {
 		flash_read_sr(dev, &sr);
-// 		ret = flash_read_sr(dev, &sr);
-// if (ret < 0) {
-// 			return ret;
-// 		}
+		// 		ret = flash_read_sr(dev, &sr);
+		// if (ret < 0) {
+		// 			return ret;
+		// 		}
 		if (!(sr & SPI_NOR_WIP_BIT)) {
 			return 0;
 		}
@@ -552,7 +554,7 @@ static int flash_read_sr(const struct device *dev, uint8_t *val)
 	return 0;
 }
 
-#if 1//def CONFIG_FLASH_EX_OP_ENABLED
+#if 1 // def CONFIG_FLASH_EX_OP_ENABLED
 static int flash_read_sr2(const struct device *dev, uint8_t *val)
 {
 	struct flash_rts5918_dev_data *data = dev->data;
@@ -602,7 +604,7 @@ static int flash_get_wp(const struct device *dev, uint8_t *val)
 
 static int flash_wait_till_ready(const struct device *dev)
 {
-//int ret;
+	// int ret;
 	int timeout = TIMEOUT_SPIBUSY;
 	uint8_t sr = 0;
 
@@ -611,10 +613,10 @@ static int flash_wait_till_ready(const struct device *dev)
 	 */
 	do {
 		flash_read_sr(dev, &sr);
-// 		ret = flash_read_sr(dev, &sr);
-// if (ret < 0) {
-// 			return ret;
-// 		}
+		// 		ret = flash_read_sr(dev, &sr);
+		// if (ret < 0) {
+		// 			return ret;
+		// 		}
 		if (!(sr & SPI_NOR_WIP_BIT)) {
 			return 0;
 		}
@@ -627,7 +629,7 @@ static int flash_wait_till_ready(const struct device *dev)
 
 static int saf_flash_wait_till_ready(const struct device *dev)
 {
-//int ret;
+	// int ret;
 	int timeout = TIMEOUT_SAFLIMITCNT;
 	uint8_t sr = 0;
 
@@ -636,10 +638,10 @@ static int saf_flash_wait_till_ready(const struct device *dev)
 	 */
 	do {
 		flash_read_sr(dev, &sr);
-// 		ret = flash_read_sr(dev, &sr);
-// if (ret < 0) {
-// 			return ret;
-// 		}
+		// 		ret = flash_read_sr(dev, &sr);
+		// if (ret < 0) {
+		// 			return ret;
+		// 		}
 		if (!(sr & SPI_NOR_WIP_BIT)) {
 			return 0;
 		}
@@ -655,7 +657,7 @@ static int flash_enter_4byte(const struct device *dev)
 {
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
-	uint32_t len = 0,ret;
+	uint32_t len = 0, ret;
 	spic_usermode(dev);
 	config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
 	ret = spic_write(dev, command, NULL, &len);
@@ -675,7 +677,7 @@ static int flash_exit_4byte(const struct device *dev)
 {
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
-	uint32_t len = 0,ret;
+	uint32_t len = 0, ret;
 	spic_usermode(dev);
 	config_command(command, SPI_NOR_CMD_EXIT_4BA, 0, 0, 0);
 	ret = spic_write(dev, command, NULL, &len);
@@ -691,13 +693,13 @@ exit:
 	return ret;
 }
 
-#if 1//def CONFIG_FLASH_EX_OP_ENABLED
+#if 1 // def CONFIG_FLASH_EX_OP_ENABLED
 static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_t cnt)
 {
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
 	const struct flash_rts5918_dev_config *config = dev->config;
-	volatile struct reg_spic_reg *spic_reg = config->regs;	
+	volatile struct reg_spic_reg *spic_reg = config->regs;
 	int ret;
 	uint32_t len = cnt;
 	spic_usermode(dev);
@@ -708,7 +710,7 @@ static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_
 		// 		spic_automode(dev);
 		// 	}
 		// } else {
-			spic_automode(dev);
+		spic_automode(dev);
 		// }
 		return ret;
 	}
@@ -727,7 +729,7 @@ exit:
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 	return ret;
 }
@@ -737,7 +739,7 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
 	const struct flash_rts5918_dev_config *config = dev->config;
-	volatile struct reg_spic_reg *spic_reg = config->regs;		
+	volatile struct reg_spic_reg *spic_reg = config->regs;
 	int ret;
 	uint32_t len = cnt;
 	spic_usermode(dev);
@@ -748,7 +750,7 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 		// 		spic_automode(dev);
 		// 	}
 		// } else {
-			spic_automode(dev);
+		spic_automode(dev);
 		// }
 		return ret;
 	}
@@ -767,7 +769,7 @@ exit:
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 	return ret;
 }
@@ -778,9 +780,9 @@ static int flash_erase_sector(const struct device *dev, uint32_t address, uint8_
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
 	// enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_24;
-enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_32;
-const struct flash_rts5918_dev_config *config = dev->config;
-volatile struct reg_spic_reg *spic_reg = config->regs;
+	enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_32;
+	const struct flash_rts5918_dev_config *config = dev->config;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
 	int ret;
 	uint32_t len = 0;
 	spic_usermode(dev);
@@ -791,9 +793,9 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
 			printk("exit 4byte addr: 4BA failed %d!", ret);
-			//return ret;
-		}				
-	}	
+			// return ret;
+		}
+	}
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
 		// if ((uintptr_t)spic_reg == 0x40000000) {
@@ -801,7 +803,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 		// 		spic_automode(dev);
 		// 	}
 		// } else {
-			spic_automode(dev);
+		spic_automode(dev);
 		// }
 		return ret;
 	}
@@ -825,16 +827,16 @@ err_exit:
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
 			printk("Enable 4byte addr: 4BA failed %d!", ret);
-			//return ret;
-		}				
-	}		
+			// return ret;
+		}
+	}
 
 	// if ((uintptr_t)spic_reg == 0x40000000) {
 	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 	// flash_write_disable(dev);
 	return ret;
@@ -845,9 +847,9 @@ static int saf_flash_erase_sector(const struct device *dev, uint32_t address, ui
 	struct flash_rts5918_dev_data *data = dev->data;
 	struct qspi_cmd *command = &data->command_default;
 	// enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_24;
-enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_32;
-const struct flash_rts5918_dev_config *config = dev->config;
-volatile struct reg_spic_reg *spic_reg = config->regs;
+	enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_32;
+	const struct flash_rts5918_dev_config *config = dev->config;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
 	int ret;
 	uint32_t len = 0;
 	spic_usermode(dev);
@@ -858,9 +860,9 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
 			printk("exit 4byte addr: 4BA failed %d!", ret);
-			//return ret;
-		}				
-	}	
+			// return ret;
+		}
+	}
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
 		// if ((uintptr_t)spic_reg == 0x40000000) {
@@ -868,7 +870,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 		// 		spic_automode(dev);
 		// 	}
 		// } else {
-			spic_automode(dev);
+		spic_automode(dev);
 		// }
 		return ret;
 	}
@@ -881,7 +883,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	if (ret < 0) {
 		goto err_exit;
 	}
-	
+
 	k_msleep(30);
 	ret = saf_flash_wait_till_ready(dev);
 err_exit:
@@ -894,17 +896,64 @@ err_exit:
 	// 	if (ret != 0) {
 	// 		printk("Enable 4byte addr: 4BA failed %d!", ret);
 	// 		//return ret;
-	// 	}				
-	// }		
+	// 	}
+	// }
 
 	// if ((uintptr_t)spic_reg == 0x40000000) {
 	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 	// flash_write_disable(dev);
+	return ret;
+}
+
+static int flash_erase_block(const struct device *dev, uint32_t address)
+{
+	struct flash_rts5918_dev_data *data = dev->data;
+	struct qspi_cmd *command = &data->command_default;
+	const struct flash_rts5918_dev_config *config = dev->config;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
+
+	int ret;
+	uint32_t len = 0;
+
+	spic_usermode(dev);
+
+	/* Check 4-byte mode condition depend on the address */
+	if (is_4byte_address(address)) {
+		/* Enter 4-byte mode */
+		flash_enter_4byte(dev);
+	} else {
+		/* Exit 3-byte mode */
+		flash_exit_4byte(dev);
+	}
+
+	spic_usermode(dev);
+
+	if ((ret = flash_write_enable(dev)) < 0) {
+		goto err_exit;
+	}
+
+	if (is_4byte_address(address)) {
+		config_command(command, SPI_NOR_CMD_BE_4B, address, SPIC_CFG_ADDR_SIZE_32, 0);
+	} else {
+		config_command(command, SPI_NOR_CMD_BE, address, SPIC_CFG_ADDR_SIZE_24, 0);
+	}
+
+	if ((ret = spic_write(dev, command, NULL, &len)) < 0) {
+		goto err_exit;
+	}
+
+	if ((ret = flash_wait_till_ready(dev)) < 0) {
+		goto err_exit;
+	}
+
+	flash_write_disable(dev);
+err_exit:
+	spic_automode(dev);
 	return ret;
 }
 
@@ -932,12 +981,12 @@ static inline void spic_restore_automode(const struct device *dev)
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 }
 
-static int flash_read_sec_reg(const struct device *dev, uint32_t address,
-			      void *data, uint32_t length)
+static int flash_read_sec_reg(const struct device *dev, uint32_t address, void *data,
+			      uint32_t length)
 {
 	struct flash_rts5918_dev_data *dev_data = dev->data;
 	struct qspi_cmd *command = &dev_data->command_default;
@@ -949,15 +998,15 @@ static int flash_read_sec_reg(const struct device *dev, uint32_t address,
 	}
 
 	spic_usermode(dev);
-	config_command(command, FLASH_CMD_RDSECREG, address,
-		       SPIC_CFG_ADDR_SIZE_24, SEC_REG_READ_DUMMY);
+	config_command(command, FLASH_CMD_RDSECREG, address, SPIC_CFG_ADDR_SIZE_24,
+		       SEC_REG_READ_DUMMY);
 	ret = spic_read(dev, command, data, (size_t *)&len);
 	spic_restore_automode(dev);
 	return ret;
 }
 
-static int flash_program_sec_reg(const struct device *dev, uint32_t address,
-				 const void *data, uint32_t length)
+static int flash_program_sec_reg(const struct device *dev, uint32_t address, const void *data,
+				 uint32_t length)
 {
 	struct flash_rts5918_dev_data *dev_data = dev->data;
 	struct qspi_cmd *command = &dev_data->command_default;
@@ -974,8 +1023,7 @@ static int flash_program_sec_reg(const struct device *dev, uint32_t address,
 		goto out;
 	}
 
-	config_command(command, FLASH_CMD_PPSECREG, address,
-		       SPIC_CFG_ADDR_SIZE_24, 0);
+	config_command(command, FLASH_CMD_PPSECREG, address, SPIC_CFG_ADDR_SIZE_24, 0);
 	ret = spic_write(dev, command, data, &len);
 	if (ret < 0) {
 		goto out_disable;
@@ -1002,8 +1050,7 @@ static int flash_erase_sec_reg(const struct device *dev, uint32_t address)
 		goto out;
 	}
 
-	config_command(command, FLASH_CMD_ERSECREG, address,
-		       SPIC_CFG_ADDR_SIZE_24, 0);
+	config_command(command, FLASH_CMD_ERSECREG, address, SPIC_CFG_ADDR_SIZE_24, 0);
 	ret = spic_write(dev, command, NULL, &len);
 	if (ret < 0) {
 		goto out_disable;
@@ -1025,34 +1072,114 @@ struct qspi_cmd_set {
 /* qspi_mode 對應的指令 */
 static const struct qspi_cmd_set qspi_cmd_table[] = {
 	/* mode 0: 1-1-1 */
-	[0] = {
-		.read = SPI_NOR_CMD_READ_4B,
-		.program = SPI_NOR_CMD_PP_4B,
-		.dummy = 0,
-	},
+	[0] =
+		{
+			.read = SPI_NOR_CMD_READ_4B,
+			.program = SPI_NOR_CMD_PP_4B,
+			.dummy = 0,
+		},
 	/* mode 1: 1-1-4 */
-	[1] = {
-		.read = SPI_NOR_CMD_QREAD,
-		.program = SPI_NOR_CMD_PP_1_1_4,
-		.dummy = 8,
-	},
+	[1] =
+		{
+			.read = SPI_NOR_CMD_QREAD,
+			.program = SPI_NOR_CMD_PP_1_1_4,
+			.dummy = 8,
+		},
 	/* mode 2: 1-4-4 */
-	[2] = {
-		.read = SPI_NOR_CMD_4READ,
-		.program = SPI_NOR_CMD_PP_1_4_4,
-		.dummy = 8,
-	},
+	[2] =
+		{
+			.read = SPI_NOR_CMD_4READ,
+			.program = SPI_NOR_CMD_PP_1_4_4,
+			.dummy = 8,
+		},
 };
 
-static inline const struct qspi_cmd_set *
-flash_get_qspi_cmd(const struct device *dev)
+static inline const struct qspi_cmd_set *flash_get_qspi_cmd(const struct device *dev)
 {
-	ARG_UNUSED(dev);
-	//if (cfg->qspi_mode >= ARRAY_SIZE(qspi_cmd_table)) {
-		return &qspi_cmd_table[0]; /* fallback 1-1-1 */
-	//}
+	struct flash_rts5918_dev_config const *cfg = dev->config;
 
-	//return &qspi_cmd_table[cfg->qspi_mode];
+	if (cfg->qspi_mode >= ARRAY_SIZE(qspi_cmd_table)) {
+		return &qspi_cmd_table[0]; /* fallback 1-1-1 */
+	}
+
+	return &qspi_cmd_table[cfg->qspi_mode];
+}
+
+static int flash_convert_command_set(struct qspi_cmd_set *cmd_set, bool is_4byte_cmd)
+{
+	if (is_4byte_cmd) {
+		switch (cmd_set->program) {
+		case SPI_NOR_CMD_PP:
+			cmd_set->program = SPI_NOR_CMD_PP_4B;
+			break;
+		case SPI_NOR_CMD_PP_1_1_4:
+			cmd_set->program = SPI_NOR_CMD_PP_1_1_4_4B;
+			break;
+		case SPI_NOR_CMD_PP_1_4_4:
+			cmd_set->program = SPI_NOR_CMD_PP_1_4_4_4B;
+			break;
+		default:
+			break;
+		}
+		switch (cmd_set->read) {
+		case SPI_NOR_CMD_READ:
+			cmd_set->read = SPI_NOR_CMD_READ_4B;
+			break;
+		case SPI_NOR_CMD_READ_FAST:
+			cmd_set->read = SPI_NOR_CMD_READ_FAST_4B;
+			break;
+		case SPI_NOR_CMD_DREAD:
+			cmd_set->read = SPI_NOR_CMD_DREAD_4B;
+			break;
+		case SPI_NOR_CMD_QREAD:
+			cmd_set->read = SPI_NOR_CMD_QREAD_4B;
+			break;
+		case SPI_NOR_CMD_2READ:
+			cmd_set->read = SPI_NOR_CMD_2READ_4B;
+			break;
+		case SPI_NOR_CMD_4READ:
+			cmd_set->read = SPI_NOR_CMD_4READ_4B;
+			break;
+		default:
+			break;
+		}
+	} else {
+		switch (cmd_set->program) {
+		case SPI_NOR_CMD_PP_4B:
+			cmd_set->program = SPI_NOR_CMD_PP;
+			break;
+		case SPI_NOR_CMD_PP_1_1_4_4B:
+			cmd_set->program = SPI_NOR_CMD_PP_1_1_4;
+			break;
+		case SPI_NOR_CMD_PP_1_4_4_4B:
+			cmd_set->program = SPI_NOR_CMD_PP_1_4_4;
+			break;
+		default:
+			break;
+		}
+		switch (cmd_set->read) {
+		case SPI_NOR_CMD_READ_4B:
+			cmd_set->read = SPI_NOR_CMD_READ;
+			break;
+		case SPI_NOR_CMD_READ_FAST_4B:
+			cmd_set->read = SPI_NOR_CMD_READ_FAST;
+			break;
+		case SPI_NOR_CMD_DREAD_4B:
+			cmd_set->read = SPI_NOR_CMD_DREAD;
+			break;
+		case SPI_NOR_CMD_QREAD_4B:
+			cmd_set->read = SPI_NOR_CMD_QREAD;
+			break;
+		case SPI_NOR_CMD_2READ_4B:
+			cmd_set->read = SPI_NOR_CMD_2READ;
+			break;
+		case SPI_NOR_CMD_4READ_4B:
+			cmd_set->read = SPI_NOR_CMD_4READ;
+			break;
+		default:
+			break;
+		}
+	}
 }
 
 static int flash_program_page(const struct device *dev, uint32_t address, const uint8_t *data,
@@ -1061,39 +1188,46 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 	struct flash_rts5918_dev_data *dev_data = dev->data;
 	struct qspi_cmd *command = &dev_data->command_default;
 	const struct flash_rts5918_dev_config *config = dev->config;
-	volatile struct reg_spic_reg *spic_reg = config->regs;		
-	enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_24;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
+	const enum spic_address_size addr_size =
+		is_4byte_address(address) ? SPIC_CFG_ADDR_SIZE_32 : SPIC_CFG_ADDR_SIZE_24;
 	int ret = 0;
 	uint32_t offset = 0, chunk = 0, page_size = FLASH_PAGE_SZ;
+
+	const struct qspi_cmd_set *cmd = flash_get_qspi_cmd(dev);
+
+	/* Convert to 3-byte / 4-byte mode command */
+	flash_convert_command_set(cmd, is_4byte_address(address));
+
+	/* Enter usermode */
 	spic_usermode(dev);
+
+	/* Check 4-byte mode condition depend on the address */
+	if (is_4byte_address(address)) {
+		/* Enter 4-byte mode */
+		flash_enter_4byte(dev);
+	} else {
+		/* Exit 3-byte mode */
+		flash_exit_4byte(dev);
+	}
+
+	/* Enter user mode */
+	spic_usermode(dev);
+
 	while (size > 0) {
 		ret = flash_write_enable(dev);
 		if (ret < 0) {
-			// if ((uintptr_t)spic_reg == 0x40000000) {
-			// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			// 		spic_automode(dev);
-			// 	}
-			// } else {
-				spic_automode(dev);
-			// }
+			spic_automode(dev);
 			return ret;
 		}
 
 		offset = address % page_size;
 		chunk = (offset + size < page_size) ? size : (page_size - offset);
 
-		// config_command(command, SPI_NOR_CMD_PP, address, addr_size, 0);
-		const struct qspi_cmd_set *cmd;
-
-		cmd = flash_get_qspi_cmd(dev);
-
-		config_command(command,
-				cmd->program,
-				address,
-				addr_size,
-				0);
+		config_command(command, cmd->program, address, addr_size, 0);
 
 		ret = spic_write(dev, command, data, (size_t *)&chunk);
+
 		if (ret < 0) {
 			goto err_exit;
 		}
@@ -1107,30 +1241,19 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 
 err_exit:
 	flash_write_disable(dev);
-	// if ((uintptr_t)spic_reg == 0x40000000) {
-	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-	// 		spic_automode(dev);
-	// 	}
-	// } else {
-		spic_automode(dev);
-	// }
+	spic_automode(dev);
 	return ret;
 }
 
-// static int flash_normal_read(const struct device *dev, uint8_t rdcmd, uint32_t address,
-// 			     uint8_t *data, uint32_t size)
-static int flash_normal_read(const struct device *dev,
-			     uint8_t rdcmd,
-			     uint8_t dummy,
-			     uint32_t address,
-			     uint8_t *data,
-			     uint32_t size)
+static int flash_normal_read(const struct device *dev, uint8_t rdcmd, uint8_t dummy,
+			     uint32_t address, uint8_t *data, uint32_t size)
 {
 	struct flash_rts5918_dev_data *dev_data = dev->data;
 	struct qspi_cmd *command = &dev_data->command_default;
 	const struct flash_rts5918_dev_config *config = dev->config;
-	volatile struct reg_spic_reg *spic_reg = config->regs;		
-	enum spic_address_size addr_size = SPIC_CFG_ADDR_SIZE_24;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
+	const enum spic_address_size addr_size =
+		is_4byte_address(address) ? SPIC_CFG_ADDR_SIZE_32 : SPIC_CFG_ADDR_SIZE_24;
 	int ret;
 
 	uint32_t src_addr = address;
@@ -1138,9 +1261,7 @@ static int flash_normal_read(const struct device *dev,
 
 	uint32_t remind_size = size;
 	uint32_t block_size = 0x8000UL;
-	// uint8_t dummy_count = (rdcmd == SPI_NOR_CMD_READ) ? 0 : 8;
 
-	// config_command(command, rdcmd, src_addr, addr_size, dummy_count);
 	config_command(command, rdcmd, src_addr, addr_size, dummy);
 	spic_usermode(dev);
 	while (remind_size > 0) {
@@ -1159,11 +1280,11 @@ static int flash_normal_read(const struct device *dev,
 
 		if (ret < 0) {
 			// if ((uintptr_t)spic_reg == 0x40000000) {
-			// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			// 		spic_automode(dev);
+			// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8))
+			// { 		spic_automode(dev);
 			// 	}
 			// } else {
-				spic_automode(dev);
+			spic_automode(dev);
 			// }
 			return ret;
 		}
@@ -1173,23 +1294,23 @@ static int flash_normal_read(const struct device *dev,
 	// 		spic_automode(dev);
 	// 	}
 	// } else {
-		spic_automode(dev);
+	spic_automode(dev);
 	// }
 	return 0;
 }
 
 static int check_boundary(off_t offset, size_t len)
 {
-	// if (offset < 0) {
-		// 	return -EINVAL;
-	// }
+	if (offset < 0) {
+		return -EINVAL;
+	}
 
 	// if (offset >= (DT_REG_ADDR(SOC_NV_FLASH_NODE) + DT_REG_SIZE(SOC_NV_FLASH_NODE))) {
-		// 	return -EINVAL;
+	// 	return -EINVAL;
 	// }
 
 	// if (len > ((DT_REG_ADDR(SOC_NV_FLASH_NODE) + DT_REG_SIZE(SOC_NV_FLASH_NODE))-offset)) {
-		// 	return -EINVAL;
+	// 	return -EINVAL;
 	// }
 
 	return 0;
@@ -1202,36 +1323,35 @@ static int flash_rts5918_erase(const struct device *dev, off_t offset, size_t le
 	if (len == 0) {
 		return 0;
 	}
-	//return 0;
-	// if ((offset % FLASH_ERASE_BLK_SZ) != 0) {
-		// 	return -EINVAL;
-	// }
 
-	// if ((len % FLASH_ERASE_BLK_SZ) != 0) {
-		// 	return -EINVAL;
-	// }
+	if ((offset % FLASH_ERASE_SEC_SZ) != 0) {
+		return -EINVAL;
+	}
 
-	// ret = check_boundary(offset, len);
-	// if (ret < 0) {
-		// 	return ret;
-	// }
+	if ((len % FLASH_ERASE_SEC_SZ) != 0 || len < FLASH_ERASE_SEC_SZ) {
+		return -EINVAL;
+	}
 
+	ret = check_boundary(offset, len);
+
+	if (ret < 0) {
+		return ret;
+	}
 
 	// k_sem_take(&data->sem, K_FOREVER);
 
-	// for (; len > 0; len -= FLASH_ERASE_BLK_SZ) {
-		//flash_rts5918_saf_erase_sector_handler(dev, offset);
-	if (offset > 0xFFFFFF) {
-		ret = flash_erase_sector(dev, offset, FOURBYTEERASE);
-	} else {
-		ret = flash_erase_sector(dev, offset, THREEBYTEERASE);
+	for (off_t addr = offset; len > 0;) {
+		if (len >= FLASH_ERASE_BLK_SZ) {
+			ret = flash_erase_block(dev, addr);
+			len -= FLASH_ERASE_BLK_SZ;
+			addr += FLASH_ERASE_BLK_SZ;
+		} else {
+			ret = flash_erase_sector(
+				dev, addr, is_4byte_address(addr) ? FOURBYTEERASE : THREEBYTEERASE);
+			len -= FLASH_ERASE_SEC_SZ;
+			addr += FLASH_ERASE_SEC_SZ;
+		}
 	}
-		// if (ret < 0) {
-			// 	LOG_ERR("erase @0x%08lx fail", offset);
-		// }
-		// offset += FLASH_ERASE_BLK_SZ;
-	// }
-
 
 	// k_sem_give(&data->sem);
 
@@ -1266,6 +1386,10 @@ static int flash_rts5918_read(const struct device *dev, off_t offset, void *data
 {
 	int ret;
 
+	/**
+	 * If the requested length is 0, we don't need to issue any command to flash.
+	 * It is a dummy operation.
+	 */
 	if (len == 0) {
 		return 0;
 	}
@@ -1275,19 +1399,28 @@ static int flash_rts5918_read(const struct device *dev, off_t offset, void *data
 		return ret;
 	}
 
-	// k_sem_take(&dev_data->sem, K_FOREVER);
-	// ret = flash_normal_read(dev, SPI_NOR_CMD_READ, offset, data, len);
-	const struct qspi_cmd_set *cmd;
+	/* Get command set */
+	const struct qspi_cmd_set *cmd = flash_get_qspi_cmd(dev);
 
-	cmd = flash_get_qspi_cmd(dev);
+	/* Convert to 3-byte / 4-byte mode command */
+	flash_convert_command_set(cmd, is_4byte_address(offset));
 
-	ret = flash_normal_read(dev,
-			cmd->read,
-			cmd->dummy,
-			offset,
-			data,
-			len);
-	// k_sem_give(&dev_data->sem);
+	/* Enter user mode */
+	spic_usermode(dev);
+
+	/* Check 4-byte mode condition depend on the address */
+	if (is_4byte_address(offset)) {
+		/* Enter 4-byte mode */
+		flash_enter_4byte(dev);
+	} else {
+		/* Exit 3-byte mode */
+		flash_exit_4byte(dev);
+	}
+
+	/* Enter user mode */
+	spic_usermode(dev);
+
+	ret = flash_normal_read(dev, cmd->read, cmd->dummy, offset, data, len);
 
 	return ret;
 }
@@ -1367,8 +1500,7 @@ static int flash_rts5918_ex_op(const struct device *dev, uint16_t opcode, const 
 		}
 
 		rc = pinctrl_apply_state(config->pcfg,
-					 (cs == 0U) ? PINCTRL_STATE_CS0
-						    : PINCTRL_STATE_CS1);
+					 (cs == 0U) ? PINCTRL_STATE_CS0 : PINCTRL_STATE_CS1);
 		if (rc < 0 && rc != -ENOENT) {
 			LOG_ERR("SPIC cs%u pinctrl apply failed (%d)", cs, rc);
 			ret = rc;
@@ -1398,8 +1530,7 @@ static int flash_rts5918_ex_op(const struct device *dev, uint16_t opcode, const 
 			ret = -EINVAL;
 			break;
 		}
-		ret = flash_program_sec_reg(dev, op->address, op->buf,
-					    op->length);
+		ret = flash_program_sec_reg(dev, op->address, op->buf, op->length);
 		break;
 	}
 	case FLASH_RTS5918_EX_OP_SEC_REG_ERASE: {
@@ -1450,7 +1581,7 @@ static const struct flash_driver_api flash_rts5918_api = {
 static int flash_set_qspi_mode(const struct device *dev)
 {
 	struct flash_rts5918_dev_data *data = dev->data;
-	volatile struct reg_spic_reg *regs = ((struct flash_rts5918_dev_config*)dev->config)->regs;
+	volatile struct reg_spic_reg *regs = ((struct flash_rts5918_dev_config *)dev->config)->regs;
 	struct qspi_cmd *cmd = &data->command_default;
 	uint8_t mode = 0;
 
@@ -1466,14 +1597,14 @@ static int flash_set_qspi_mode(const struct device *dev)
 		cmd->data.bus_width = SPIC_CFG_BUS_QUAD;
 		regs->CTRL0 |= (0x2 << 18);
 		/* enable QE bit */
-	{
-		uint8_t sr2;
-		flash_read_sr2(dev, &sr2);
-		if (!(sr2 & BIT(1))) { /* QE bit = 1 */
-			sr2 |= BIT(1);
-			flash_write_status_reg2(dev, &sr2, 1);
+		{
+			uint8_t sr2;
+			flash_read_sr2(dev, &sr2);
+			if (!(sr2 & BIT(1))) { /* QE bit = 1 */
+				sr2 |= BIT(1);
+				flash_write_status_reg2(dev, &sr2, 1);
+			}
 		}
-	}
 		break;
 	case 2: /* 1-4-4 */
 		cmd->instruction.bus_width = SPIC_CFG_BUS_SINGLE;
@@ -1481,14 +1612,14 @@ static int flash_set_qspi_mode(const struct device *dev)
 		cmd->data.bus_width = SPIC_CFG_BUS_QUAD;
 		regs->CTRL0 |= (0x2 << 18) | (0x2 << 16);
 		/* enable QE bit */
-	{
-		uint8_t sr2;
-		flash_read_sr2(dev, &sr2);
-		if (!(sr2 & BIT(1))) {
-			sr2 |= BIT(1);
-			flash_write_status_reg2(dev, &sr2, 1);
+		{
+			uint8_t sr2;
+			flash_read_sr2(dev, &sr2);
+			if (!(sr2 & BIT(1))) {
+				sr2 |= BIT(1);
+				flash_write_status_reg2(dev, &sr2, 1);
+			}
 		}
-	}
 		break;
 	default:
 		return -EINVAL;
@@ -1529,7 +1660,6 @@ static int flash_rts5918_init(const struct device *dev)
 		return rc;
 	}
 
-
 	spic_reg->SSIENR = 0UL;
 	spic_reg->IMR = 0UL;
 
@@ -1543,74 +1673,75 @@ static int flash_rts5918_init(const struct device *dev)
 
 	if (!(spic_reg->VALIDCMD & 0x80000000ul)) {
 		ret = SPIC_AutoMode_EnterEngineer(dev);
-		if(ret){
+		if (ret) {
 			LOG_ERR("Enter engineer mode failed %d!", ret);
 			return ret;
 		}
-    }
+	}
 
 	if (config->enter_4ba != 0) {
-
 	}
 
 	bool wr_en = (config->enter_4ba & 0x02) != 0;
 	if (wr_en) {
-
 	}
-		// if (wr_en) {
-		// 	ret = flash_write_enable(dev);
-		// 	LOG_ERR("Enable 4byte addr: WREN!");
-		// 	if (ret != 0) {
-		// 		LOG_ERR("Enable 4byte addr: WREN failed %d!", ret);
-		// 		return ret;
-		// 	}
-		// }
+	// if (wr_en) {
+	// 	ret = flash_write_enable(dev);
+	// 	LOG_ERR("Enable 4byte addr: WREN!");
+	// 	if (ret != 0) {
+	// 		LOG_ERR("Enable 4byte addr: WREN failed %d!", ret);
+	// 		return ret;
+	// 	}
+	// }
 
-		/* SPIC for external flash (BIOS) */
-		if ((uintptr_t)spic_reg == 0x40000000) {
-			/* Set 4-byte mode to CS1 flash */
-			ret = flash_enter_4byte(dev);
-			printk("flash_enter_4byte!\r\n");
-			if (ret != 0) {
-				LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
-				return ret;
-			}
-
-			/* Set 4-byte mode to CS1 flash */
-			*(volatile uint32_t *)(0x402301e4) = 0x102ul;
-			*(volatile uint32_t *)(0x402301e8) = 0x0ul;				
-
-			ret = flash_enter_4byte(dev);
-			printk("flash_enter_4byte!\r\n");
-			if (ret != 0) {
-				LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
-				return ret;
-			}				
-
-			/* Switch back to default CS0 */
-			*(volatile uint32_t *)(0x402301e4) = 0x0ul;
-			*(volatile uint32_t *)(0x402301e8) = 0x102ul;	
-
-			/* Configure SPIC in Quad Read/Program mode */
-			spic_reg->VALIDCMD |= SPIC_AUTO_VALIDCMD_RD_QUAD_O | SPIC_AUTO_VALIDCMD_WR_QUAD_I | SPIC_AUTO_VALIDCMD_DUM_EN;
-
-			/* Register Fast Read Quad Output with 4-Byte Address (6Ch) as quad read command */
-			spic_reg->RQD &= ~SPIC_READ_QUAD_DATA_RD_QUAD_O_CMD_Msk;
-			spic_reg->RQD = (SPI_NOR_CMD_QREAD_4B << SPIC_READ_QUAD_DATA_RD_QUAD_O_CMD_Pos);
-
-			/* Register Quad Input Page Program with 4-Byte Address (34h) as quad page program command */
-			spic_reg->WQD &= ~SPIC_READ_QUAD_DATA_WR_QUAD_I_CMD_Msk;
-			spic_reg->WQD = (SPI_NOR_CMD_PP_1_1_4_4B << SPIC_READ_QUAD_DATA_WR_QUAD_I_CMD_Pos);
-
-			/* AUTOLENGTH.AUTO_ADDR_LENGTH set to 4 to support 4-byte mode */
-			spic_reg->AUTOLENGTH &= ~SPIC_AUTOLENGTH_ADDRLEN_Msk;
-			spic_reg->AUTOLENGTH |= (0x4 << SPIC_AUTOLENGTH_ADDRLEN_Pos);
-
-			/* AUTOLENGTH.RD_DUMMY_LENGTH set to 8 cycle to satisfy quad-read requirement */
-			spic_reg->AUTOLENGTH &= ~SPIC_AUTOLENGTH_RDDUMMYLEN_Msk;
-			spic_reg->AUTOLENGTH |= ((16 * spic_reg->BAUDR) << SPIC_AUTOLENGTH_RDDUMMYLEN_Pos);
-			
+	/* SPIC for external flash (BIOS) */
+	if ((uintptr_t)spic_reg == 0x40000000) {
+		/* Set 4-byte mode to CS1 flash */
+		ret = flash_enter_4byte(dev);
+		printk("flash_enter_4byte!\r\n");
+		if (ret != 0) {
+			LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
+			return ret;
 		}
+
+		/* Set 4-byte mode to CS1 flash */
+		*(volatile uint32_t *)(0x402301e4) = 0x102ul;
+		*(volatile uint32_t *)(0x402301e8) = 0x0ul;
+
+		ret = flash_enter_4byte(dev);
+		printk("flash_enter_4byte!\r\n");
+		if (ret != 0) {
+			LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
+			return ret;
+		}
+
+		/* Switch back to default CS0 */
+		*(volatile uint32_t *)(0x402301e4) = 0x0ul;
+		*(volatile uint32_t *)(0x402301e8) = 0x102ul;
+
+		/* Configure SPIC in Quad Read/Program mode */
+		spic_reg->VALIDCMD |= SPIC_AUTO_VALIDCMD_RD_QUAD_O | SPIC_AUTO_VALIDCMD_WR_QUAD_I |
+				      SPIC_AUTO_VALIDCMD_DUM_EN;
+
+		/* Register Fast Read Quad Output with 4-Byte Address (6Ch) as quad read
+		 * command */
+		spic_reg->RQD &= ~SPIC_READ_QUAD_DATA_RD_QUAD_O_CMD_Msk;
+		spic_reg->RQD = (SPI_NOR_CMD_QREAD_4B << SPIC_READ_QUAD_DATA_RD_QUAD_O_CMD_Pos);
+
+		/* Register Quad Input Page Program with 4-Byte Address (34h) as quad page
+		 * program command */
+		spic_reg->WQD &= ~SPIC_READ_QUAD_DATA_WR_QUAD_I_CMD_Msk;
+		spic_reg->WQD = (SPI_NOR_CMD_PP_1_1_4_4B << SPIC_READ_QUAD_DATA_WR_QUAD_I_CMD_Pos);
+
+		/* AUTOLENGTH.AUTO_ADDR_LENGTH set to 4 to support 4-byte mode */
+		spic_reg->AUTOLENGTH &= ~SPIC_AUTOLENGTH_ADDRLEN_Msk;
+		spic_reg->AUTOLENGTH |= (0x4 << SPIC_AUTOLENGTH_ADDRLEN_Pos);
+
+		/* AUTOLENGTH.RD_DUMMY_LENGTH set to 8 cycle to satisfy quad-read
+		 * requirement */
+		spic_reg->AUTOLENGTH &= ~SPIC_AUTOLENGTH_RDDUMMYLEN_Msk;
+		spic_reg->AUTOLENGTH |= ((16 * spic_reg->BAUDR) << SPIC_AUTOLENGTH_RDDUMMYLEN_Pos);
+	}
 	//}
 	/* according DTS setting mode to enable QE */
 	spic_usermode(dev);
@@ -1621,53 +1752,55 @@ static int flash_rts5918_init(const struct device *dev)
 	return 0;
 }
 
-
 void flash_rts5918_saf_write_enable_hardcode(volatile struct reg_spic_reg *spic_reg)
 {
-  spic_reg->SSIENR = 0;
-  spic_reg->CTRL0 = 0x80000000;
-  spic_reg->TXNDF = 0;
-  spic_reg->RXNDF = 0;
-  spic_reg->USERLENGTH = 0x1000;
-  spic_reg->DR.BYTE = 0x6;
-  spic_reg->SSIENR = 0x3;
-  while(spic_reg->SSIENR & 0x1);
+	spic_reg->SSIENR = 0;
+	spic_reg->CTRL0 = 0x80000000;
+	spic_reg->TXNDF = 0;
+	spic_reg->RXNDF = 0;
+	spic_reg->USERLENGTH = 0x1000;
+	spic_reg->DR.BYTE = 0x6;
+	spic_reg->SSIENR = 0x3;
+	while (spic_reg->SSIENR & 0x1)
+		;
 
-  spic_reg->TXFTLR = 0;
-  spic_reg->RXFTLR = 0;
-  spic_reg->FLUSH = 1;
-  spic_reg->SSIENR = 0;
-  spic_reg->CTRL0 = 0x0;
+	spic_reg->TXFTLR = 0;
+	spic_reg->RXFTLR = 0;
+	spic_reg->FLUSH = 1;
+	spic_reg->SSIENR = 0;
+	spic_reg->CTRL0 = 0x0;
 }
 
 uint8_t flash_rts5918_saf_read_status_hardcode(volatile struct reg_spic_reg *spic_reg)
 {
-  uint8_t status;
+	uint8_t status;
 
-  spic_reg->SSIENR = 0;
-  spic_reg->CTRL0 = 0x80000300;
-  spic_reg->TXNDF = 0;
-  spic_reg->RXNDF = 1;
-  spic_reg->USERLENGTH = 0x1000;
-  spic_reg->DR.BYTE = 0x5;
-  spic_reg->SSIENR = 0x1;
+	spic_reg->SSIENR = 0;
+	spic_reg->CTRL0 = 0x80000300;
+	spic_reg->TXNDF = 0;
+	spic_reg->RXNDF = 1;
+	spic_reg->USERLENGTH = 0x1000;
+	spic_reg->DR.BYTE = 0x5;
+	spic_reg->SSIENR = 0x1;
 
-  spic_reg->IMR |= 0x8;
-  spic_reg->RXFTLR = 2;
-  spic_reg->SSIENR = 0x1;
-  status = spic_reg->DR.BYTE;
-  while(spic_reg->SSIENR & 0x1);
+	spic_reg->IMR |= 0x8;
+	spic_reg->RXFTLR = 2;
+	spic_reg->SSIENR = 0x1;
+	status = spic_reg->DR.BYTE;
+	while (spic_reg->SSIENR & 0x1)
+		;
 
-  spic_reg->TXFTLR = 0;
-  spic_reg->RXFTLR = 0;
-  spic_reg->FLUSH = 1;
-  spic_reg->SSIENR = 0;
-  spic_reg->CTRL0 = 0x0;
+	spic_reg->TXFTLR = 0;
+	spic_reg->RXFTLR = 0;
+	spic_reg->FLUSH = 1;
+	spic_reg->SSIENR = 0;
+	spic_reg->CTRL0 = 0x0;
 
-  return status;
+	return status;
 }
 
-void flash_rts5918_saf_erase_sector_hardcode(volatile struct reg_spic_reg *spic_reg, uint32_t address)
+void flash_rts5918_saf_erase_sector_hardcode(volatile struct reg_spic_reg *spic_reg,
+					     uint32_t address)
 {
 	spic_reg->SSIENR = 0;
 	spic_reg->CTRL0 = 0x80000000;
@@ -1676,26 +1809,27 @@ void flash_rts5918_saf_erase_sector_hardcode(volatile struct reg_spic_reg *spic_
 	spic_reg->USERLENGTH = 0x1000;
 	spic_reg->DR.BYTE = 33;
 	spic_reg->USERLENGTH |= 0x40000;
-  	spic_reg->DR.BYTE = (address >> 24) & 0xFF;
-  	spic_reg->DR.BYTE = (address >> 16) & 0xFF;
-  	spic_reg->DR.BYTE = (address >> 8) & 0xFF;
-  	spic_reg->DR.BYTE = address & 0xFF;
+	spic_reg->DR.BYTE = (address >> 24) & 0xFF;
+	spic_reg->DR.BYTE = (address >> 16) & 0xFF;
+	spic_reg->DR.BYTE = (address >> 8) & 0xFF;
+	spic_reg->DR.BYTE = address & 0xFF;
 	spic_reg->SSIENR = 0x3;
-  	while(spic_reg->SSIENR & 0x1);
+	while (spic_reg->SSIENR & 0x1)
+		;
 
 	spic_reg->TXFTLR = 0;
-  	spic_reg->RXFTLR = 0;
-  	spic_reg->FLUSH = 1;
-  	spic_reg->SSIENR = 0;
-  	spic_reg->CTRL0 = 0x0;
+	spic_reg->RXFTLR = 0;
+	spic_reg->FLUSH = 1;
+	spic_reg->SSIENR = 0;
+	spic_reg->CTRL0 = 0x0;
 }
 
 void flash_rts5918_saf_erase_sector_handler(const struct device *dev, const uint32_t address)
 {
-	//LOG_INF("erase handler");
-	//LOG_INF("reg base: %x", (uint32_t)spic_reg);
+	// LOG_INF("erase handler");
+	// LOG_INF("reg base: %x", (uint32_t)spic_reg);
 	saf_flash_erase_sector(dev, address, FOURBYTEERASE);
-	return ;
+	return;
 	/* below is dead code retained for reference; keep declarations
 	 * so the unreachable block still parses cleanly. */
 	const struct flash_rts5918_dev_config *config = dev->config;
@@ -1704,77 +1838,80 @@ void flash_rts5918_saf_erase_sector_handler(const struct device *dev, const uint
 	uint8_t status;
 	// const struct flash_rts5918_dev_config *config = dev->config;
 	// const struct flash_rts5918_dev_config *config = dev->config;
-    // volatile struct reg_spic_reg *spic_reg = config->regs;
-
+	// volatile struct reg_spic_reg *spic_reg = config->regs;
 
 	// LOG_HEXDUMP_INF(mmap_addr, 32, "read flash");
-	 LOG_INF("pre wr_en_1");
+	LOG_INF("pre wr_en_1");
 	// LOG_INF("pre wr_en_2");
 	flash_rts5918_saf_write_enable_hardcode(spic_reg);
-	 LOG_INF("wr_en");
+	LOG_INF("wr_en");
 	do {
 		status = flash_rts5918_saf_read_status_hardcode(spic_reg);
 		// LOG_INF("rd_sts %02X", status);
-	} while((status & 0x2) == 0);
+	} while ((status & 0x2) == 0);
 
 	// LOG_HEXDUMP_INF(mmap_addr, 32, "read flash");
 
 	flash_rts5918_saf_erase_sector_hardcode(spic_reg, address);
-	 LOG_INF("erase 0x%08X", address);
+	LOG_INF("erase 0x%08X", address);
 
 	do {
 		status = flash_rts5918_saf_read_status_hardcode(spic_reg);
-		 LOG_INF("rd_sts %02X", status);
-	} while(status & 0x1);
+		LOG_INF("rd_sts %02X", status);
+	} while (status & 0x1);
 
 	// LOG_HEXDUMP_INF(mmap_addr, 32, "read flash");
 }
 
 #define RTS5918_FLASH_PINCTRL_DEF(inst) PINCTRL_DT_INST_DEFINE(inst)
 
-
-#define RTS5918_FLASH_CONFIG(inst)                                             \
-	static const struct flash_rts5918_dev_config flash_rts5918_config_##inst = {    \
-		.regs = (volatile struct reg_spic_reg *)DT_INST_REG_ADDR(inst),         \
-		.flash_rts5918_parameters = {                                        \
-				.write_block_size = FLASH_WRITE_BLK_SZ,                      \
-				.erase_value = 0xff,                                         \
-			},                                                               \
-		.enter_4ba = DT_INST_PROP_OR(inst, enter_4byte_addr, 0),                \
-		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                           \
+#define RTS5918_FLASH_CONFIG(inst)                                                                 \
+	static const struct flash_rts5918_dev_config flash_rts5918_config_##inst = {               \
+		.regs = (volatile struct reg_spic_reg *)DT_INST_REG_ADDR(inst),                    \
+		.flash_rts5918_parameters =                                                        \
+			{                                                                          \
+				.write_block_size = FLASH_WRITE_BLK_SZ,                            \
+				.erase_value = 0xff,                                               \
+			},                                                                         \
+		.enter_4ba = DT_INST_PROP_OR(inst, enter_4byte_addr, 0),                           \
+		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(inst),                                      \
 	};
 
-#define RTS5918_FLASH_DATA(inst)                                                                     \
-	static struct flash_rts5918_dev_data flash_rts5918_data_##inst = {                           \
-		.command_default = {                                                                 \
-			.instruction = {                                                             \
-					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
-					.disabled = 0,                                               \
-				},                                                                   \
-			.address = {                                                                 \
-					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
-					.size = SPIC_CFG_ADDR_SIZE_24,                               \
-					.disabled = 0,                                               \
-				},                                                                   \
-			.alt = {                                                                     \
-					.size = 0,                                                   \
-					.disabled = 1,                                               \
-				},                                                                   \
-			.dummy_count = 0,                                                            \
-			.data = {                                                                    \
-					.bus_width = SPIC_CFG_BUS_SINGLE,                            \
-				},                                                                   \
-		},                                                                                   \
-		.cs = 0,                                                                             \
+#define RTS5918_FLASH_DATA(inst)                                                                   \
+	static struct flash_rts5918_dev_data flash_rts5918_data_##inst = {                         \
+		.command_default =                                                                 \
+			{                                                                          \
+				.instruction =                                                     \
+					{                                                          \
+						.bus_width = SPIC_CFG_BUS_SINGLE,                  \
+						.disabled = 0,                                     \
+					},                                                         \
+				.address =                                                         \
+					{                                                          \
+						.bus_width = SPIC_CFG_BUS_SINGLE,                  \
+						.size = SPIC_CFG_ADDR_SIZE_24,                     \
+						.disabled = 0,                                     \
+					},                                                         \
+				.alt =                                                             \
+					{                                                          \
+						.size = 0,                                         \
+						.disabled = 1,                                     \
+					},                                                         \
+				.dummy_count = 0,                                                  \
+				.data =                                                            \
+					{                                                          \
+						.bus_width = SPIC_CFG_BUS_SINGLE,                  \
+					},                                                         \
+			},                                                                         \
+		.cs = 0,                                                                           \
 	};
 
-#define RTS5918_FLASH_DEVICE_INIT(index)                                                             \
-	RTS5918_FLASH_PINCTRL_DEF(index);                                                            \
-	RTS5918_FLASH_CONFIG(index);                                                                 \
-	RTS5918_FLASH_DATA(index);                                                                   \
-	DEVICE_DT_INST_DEFINE(index, &flash_rts5918_init, NULL, &flash_rts5918_data_##index,         \
-			      &flash_rts5918_config_##index,                                         \
-			      PRE_KERNEL_1, CONFIG_FLASH_INIT_PRIORITY,                              \
-			      &flash_rts5918_api);
+#define RTS5918_FLASH_DEVICE_INIT(index)                                                           \
+	RTS5918_FLASH_PINCTRL_DEF(index);                                                          \
+	RTS5918_FLASH_CONFIG(index);                                                               \
+	RTS5918_FLASH_DATA(index);                                                                 \
+	DEVICE_DT_INST_DEFINE(index, &flash_rts5918_init, NULL, &flash_rts5918_data_##index,       \
+			      &flash_rts5918_config_##index, PRE_KERNEL_1,                         \
+			      CONFIG_FLASH_INIT_PRIORITY, &flash_rts5918_api);
 
 DT_INST_FOREACH_STATUS_OKAY(RTS5918_FLASH_DEVICE_INIT)
