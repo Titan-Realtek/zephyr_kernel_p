@@ -1026,8 +1026,8 @@ struct qspi_cmd_set {
 static const struct qspi_cmd_set qspi_cmd_table[] = {
 	/* mode 0: 1-1-1 */
 	[0] = {
-		.read = SPI_NOR_CMD_READ,
-		.program = SPI_NOR_CMD_PP,
+		.read = SPI_NOR_CMD_READ_4B,
+		.program = SPI_NOR_CMD_PP_4B,
 		.dummy = 0,
 	},
 	/* mode 1: 1-1-4 */
