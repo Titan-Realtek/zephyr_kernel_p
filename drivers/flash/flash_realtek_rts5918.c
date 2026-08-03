@@ -702,13 +702,13 @@ static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_
 	spic_usermode(dev);
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if ((uintptr_t)spic_reg == 0x40000000) {
-			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-				spic_automode(dev);
-			}
-		} else {
+		// if ((uintptr_t)spic_reg == 0x40000000) {
+		// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+		// 		spic_automode(dev);
+		// 	}
+		// } else {
 			spic_automode(dev);
-		}
+		// }
 		return ret;
 	}
 
@@ -721,13 +721,13 @@ static int flash_write_status_reg(const struct device *dev, uint8_t *val, uint8_
 	ret = flash_wait_till_ready(dev);
 exit:
 	flash_write_disable(dev);
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	return ret;
 }
 
@@ -742,13 +742,13 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 	spic_usermode(dev);
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if ((uintptr_t)spic_reg == 0x40000000) {
-			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-				spic_automode(dev);
-			}
-		} else {
+		// if ((uintptr_t)spic_reg == 0x40000000) {
+		// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+		// 		spic_automode(dev);
+		// 	}
+		// } else {
 			spic_automode(dev);
-		}
+		// }
 		return ret;
 	}
 
@@ -761,13 +761,13 @@ static int flash_write_status_reg2(const struct device *dev, uint8_t *val, uint8
 	ret = flash_wait_till_ready(dev);
 exit:
 	flash_write_disable(dev);
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	return ret;
 }
 #endif
@@ -795,13 +795,13 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	}	
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if ((uintptr_t)spic_reg == 0x40000000) {
-			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-				spic_automode(dev);
-			}
-		} else {
+		// if ((uintptr_t)spic_reg == 0x40000000) {
+		// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+		// 		spic_automode(dev);
+		// 	}
+		// } else {
 			spic_automode(dev);
-		}
+		// }
 		return ret;
 	}
 	if (type == FOURBYTEERASE) {
@@ -817,24 +817,24 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 
 err_exit:
 	flash_write_disable(dev);
-	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
-		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
-		(void)spic_write(dev, command, NULL, &len);
+	// if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
+	// 	config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
+	// 	(void)spic_write(dev, command, NULL, &len);
 
-		ret = flash_wait_till_ready(dev);
-		if (ret != 0) {
-			printk("Enable 4byte addr: 4BA failed %d!", ret);
-			//return ret;
-		}				
-	}		
+	// 	ret = flash_wait_till_ready(dev);
+	// 	if (ret != 0) {
+	// 		printk("Enable 4byte addr: 4BA failed %d!", ret);
+	// 		//return ret;
+	// 	}				
+	// }		
 
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	// flash_write_disable(dev);
 	return ret;
 }
@@ -862,13 +862,13 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	}	
 	ret = flash_write_enable(dev);
 	if (ret < 0) {
-		if ((uintptr_t)spic_reg == 0x40000000) {
-			if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-				spic_automode(dev);
-			}
-		} else {
+		// if ((uintptr_t)spic_reg == 0x40000000) {
+		// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+		// 		spic_automode(dev);
+		// 	}
+		// } else {
 			spic_automode(dev);
-		}
+		// }
 		return ret;
 	}
 	if (type == FOURBYTEERASE) {
@@ -885,24 +885,24 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	ret = saf_flash_wait_till_ready(dev);
 err_exit:
 	flash_write_disable(dev);
-	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
-		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
-		(void)spic_write(dev, command, NULL, &len);
+	// if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
+	// 	config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
+	// 	(void)spic_write(dev, command, NULL, &len);
 
-		ret = flash_wait_till_ready(dev);
-		if (ret != 0) {
-			printk("Enable 4byte addr: 4BA failed %d!", ret);
-			//return ret;
-		}				
-	}		
+	// 	ret = flash_wait_till_ready(dev);
+	// 	if (ret != 0) {
+	// 		printk("Enable 4byte addr: 4BA failed %d!", ret);
+	// 		//return ret;
+	// 	}				
+	// }		
 
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	// flash_write_disable(dev);
 	return ret;
 }
@@ -926,13 +926,13 @@ static inline void spic_restore_automode(const struct device *dev)
 	const struct flash_rts5918_dev_config *config = dev->config;
 	volatile struct reg_spic_reg *spic_reg = config->regs;
 
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 }
 
 static int flash_read_sec_reg(const struct device *dev, uint32_t address,
@@ -1068,13 +1068,13 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 	while (size > 0) {
 		ret = flash_write_enable(dev);
 		if (ret < 0) {
-			if ((uintptr_t)spic_reg == 0x40000000) {
-				if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-					spic_automode(dev);
-				}
-			} else {
+			// if ((uintptr_t)spic_reg == 0x40000000) {
+			// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+			// 		spic_automode(dev);
+			// 	}
+			// } else {
 				spic_automode(dev);
-			}
+			// }
 			return ret;
 		}
 
@@ -1106,13 +1106,13 @@ static int flash_program_page(const struct device *dev, uint32_t address, const 
 
 err_exit:
 	flash_write_disable(dev);
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	return ret;
 }
 
@@ -1157,23 +1157,23 @@ static int flash_normal_read(const struct device *dev,
 		}
 
 		if (ret < 0) {
-			if ((uintptr_t)spic_reg == 0x40000000) {
-				if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-					spic_automode(dev);
-				}
-			} else {
+			// if ((uintptr_t)spic_reg == 0x40000000) {
+			// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+			// 		spic_automode(dev);
+			// 	}
+			// } else {
 				spic_automode(dev);
-			}
+			// }
 			return ret;
 		}
 	}
-	if ((uintptr_t)spic_reg == 0x40000000) {
-		if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
-			spic_automode(dev);
-		}
-	} else {
+	// if ((uintptr_t)spic_reg == 0x40000000) {
+	// 	if ((*(volatile uint32_t *)(0x402301e4) & (0x1 << 8)) == (0x1 << 8)) {
+	// 		spic_automode(dev);
+	// 	}
+	// } else {
 		spic_automode(dev);
-	}
+	// }
 	return 0;
 }
 
@@ -1567,12 +1567,27 @@ static int flash_rts5918_init(const struct device *dev)
 
 		/* SPIC for external flash (BIOS) */
 		if ((uintptr_t)spic_reg == 0x40000000) {
+			/* Set 4-byte mode to CS1 flash */
 			ret = flash_enter_4byte(dev);
 			printk("flash_enter_4byte!\r\n");
 			if (ret != 0) {
 				LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
 				return ret;
 			}
+
+			/* Set 4-byte mode to CS0 flash */
+			*(volatile uint32_t *)(0x402301e4) = 0x0ul;
+			*(volatile uint32_t *)(0x402301e8) = 0x102ul;	
+			ret = flash_enter_4byte(dev);
+			printk("flash_enter_4byte!\r\n");
+			if (ret != 0) {
+				LOG_ERR("Enable 4byte addr: 4BA failed %d!", ret);
+				return ret;
+			}				
+
+			/* Switch back to default CS1 */
+			*(volatile uint32_t *)(0x402301e4) = 0x102ul;
+			*(volatile uint32_t *)(0x402301e8) = 0x0ul;	
 
 			/* Configure SPIC in Quad Read/Program mode */
 			spic_reg->VALIDCMD |= SPIC_AUTO_VALIDCMD_RD_QUAD_O | SPIC_AUTO_VALIDCMD_WR_QUAD_I | SPIC_AUTO_VALIDCMD_DUM_EN;
