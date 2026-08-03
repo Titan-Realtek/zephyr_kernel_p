@@ -483,6 +483,14 @@ static int gpio_rts5918_intr_config(const struct device *port, gpio_pin_t pin,
 
 	switch (mode) {
 	case GPIO_INT_MODE_DISABLED:
+#ifdef CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT
+	case GPIO_INT_MODE_DISABLE_ONLY:
+		/* DISABLE_ONLY clears INTEN without altering INTCTRL, so a
+		 * later ENABLE_ONLY can resume with the previously configured
+		 * trigger. Behaviour is identical to DISABLED on this driver
+		 * because DISABLED also leaves INTCTRL untouched.
+		 */
+#endif
 		cfg_val &= ~GPIO_GCR_INTEN_Msk;
 		*gcr = cfg_val;
 		for(int i =0 ; i< config->num_pins;i++){
@@ -492,6 +500,17 @@ static int gpio_rts5918_intr_config(const struct device *port, gpio_pin_t pin,
 			irq_disable(pin_index);
 		}
 		return 0;
+#ifdef CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT
+	case GPIO_INT_MODE_ENABLE_ONLY:
+		/* Re-enable a previously configured interrupt without touching
+		 * INTCTRL. Caller is expected to have configured the trigger
+		 * earlier via GPIO_INT_MODE_LEVEL / _EDGE.
+		 */
+		cfg_val |= GPIO_GCR_INTEN_Msk;
+		*gcr = cfg_val;
+		irq_enable(pin_index);
+		return 0;
+#endif
 	case GPIO_INT_MODE_LEVEL:
 		switch (trig) {
 		case GPIO_INT_TRIG_LOW:
