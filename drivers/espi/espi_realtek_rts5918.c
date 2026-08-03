@@ -2713,8 +2713,17 @@ static void espi_oob_chg_isr(const struct device *dev)
 	}
 }
 
-static uint8_t oob_tx_buffer[OOB_BUFFER_SIZE] __aligned(4);
-static uint8_t oob_rx_buffer[OOB_BUFFER_SIZE] __aligned(4);
+/*
+ * RTS5918 OOB DMA can only access addresses >= 0x20080000. Placing the
+ * buffers in .noinit guarantees they land in the upper half of SRAM
+ * (.noinit follows .bss, which already extends past 0x20080000 in this
+ * build). A runtime check in espi_oob_ch_setup() verifies the constraint
+ * to catch regressions if .bss ever shrinks.
+ */
+#define RTS5918_OOB_BUF_MIN_ADDR 0x20080000UL
+
+static uint8_t oob_tx_buffer[OOB_BUFFER_SIZE] __noinit __aligned(4);
+static uint8_t oob_rx_buffer[OOB_BUFFER_SIZE] __noinit __aligned(4);
 
 static int espi_oob_ch_setup(const struct device *dev)
 {
@@ -2722,6 +2731,15 @@ static int espi_oob_ch_setup(const struct device *dev)
 	struct espi_rts5918_data *espi_data = dev->data;
 	volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
 	espi_data->oob_tx_busy = false;
+
+	/* HW constraint: OOB DMA SAR must point to address >= 0x20080000 */
+	if ((uintptr_t)oob_tx_buffer < RTS5918_OOB_BUF_MIN_ADDR ||
+	    (uintptr_t)oob_rx_buffer < RTS5918_OOB_BUF_MIN_ADDR) {
+		LOG_ERR("OOB buf addr violates >= 0x%08lx (tx=%p rx=%p)",
+			RTS5918_OOB_BUF_MIN_ADDR,
+			(void *)oob_tx_buffer, (void *)oob_rx_buffer);
+		return -EINVAL;
+	}
 
 	espi_data->oob_tx_ptr = oob_tx_buffer;
 	if (espi_data->oob_tx_ptr == NULL) {
