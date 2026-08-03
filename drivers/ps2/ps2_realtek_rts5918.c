@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(ps2_realtek_rts5918, CONFIG_PS2_LOG_LEVEL);
  * A PS/2 transaction needs 11 clock cycles. It will take about 1.1 ms for a
  * complete transaction.
  */
-#define PS2_TRANSACTION_TIMEOUT K_MSEC(2)
+#define PS2_TRANSACTION_TIMEOUT K_MSEC(5)
 
 #ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
 // #define GPIO_PS2_CLK *((uint32_t*)0x40230110)
