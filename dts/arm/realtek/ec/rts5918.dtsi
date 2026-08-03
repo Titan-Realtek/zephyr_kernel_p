@@ -1049,7 +1049,7 @@
 
 	swj_port:swj_port{
 		compatible = "swj-connector";
-		pinctrl-0 = < 
+		pinctrl-0 = <
 					  &jtag_clk_gpio107
 					  &jtag_tms_gpio106 >;
 		pinctrl-names = "default";
@@ -1058,15 +1058,7 @@
 
 	i2c_1_wrapper: i2c_1_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev phandle removed — would create
-		 * a DT dependency on the dw i2c node and force this wrapper
-		 * to init AFTER it (POST_KERNEL+38 > +29), but the wrapper
-		 * MUST run BEFORE i2c_dw_initialize so the SCCON clock is
-		 * on when dw reads the magic key. The wrapper init only
-		 * needs the clocks cell below; it doesn't touch the dw
-		 * device. See drivers/i2c/i2c_realtek_rts5918.c Phase 10.10
-		 * shim comment for the full rationale.
-		 */
+		dw-i2c-dev = <&i2c_1>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C1_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1074,7 +1066,7 @@
 
 	i2c_2_wrapper: i2c_2_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_2>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C2_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1082,7 +1074,7 @@
 
 	i2c_3_wrapper: i2c_3_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_3>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C3_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1090,7 +1082,7 @@
 
 	i2c_4_wrapper: i2c_4_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_4>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C4_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1098,7 +1090,7 @@
 
 	i2c_5_wrapper: i2c_5_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_5>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C5_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1106,7 +1098,7 @@
 
 	i2c_6_wrapper: i2c_6_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_6>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C6_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1114,7 +1106,7 @@
 
 	i2c_7_wrapper: i2c_7_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_7>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C7_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1122,7 +1114,7 @@
 
 	i2c_8_wrapper: i2c_8_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_8>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C8_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1130,7 +1122,7 @@
 
 	i2c_9_wrapper: i2c_9_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_9>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C9_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1138,7 +1130,7 @@
 
 	i2c_10_wrapper: i2c_10_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_10>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C10_PWR>;
 		clock-names = "i2c";
 		status = "disabled";
@@ -1146,7 +1138,7 @@
 
 	i2c_11_wrapper: i2c_11_wrapper {
 		compatible = "realtek,rts5918-i2c";
-		/* Phase 10.10: dw-i2c-dev removed (see i2c_1_wrapper note) */
+		dw-i2c-dev = <&i2c_11>;
 		clocks = <&sccon RTS5918_CLK_I2C RTS5918_I2C11_PWR>;
 		clock-names = "i2c";
 		status = "disabled";

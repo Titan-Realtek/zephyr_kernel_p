@@ -12,7 +12,7 @@ menuconfig I2C_RTS5918
 config I2C_RTS5918_INIT_PRIORITY
 	int "RTS5918 Init priority"
 	depends on I2C_RTS5918
-	default 45
+	default 51
 	help
 	  I2C device driver initialization priority.
 
