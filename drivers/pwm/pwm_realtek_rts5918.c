@@ -41,7 +41,7 @@ static int pwm_rts5918_set_cycles(const struct device *dev, uint32_t channel,
 
 	pwm_div = period_cycles;
 	pwm_duty = pulse_cycles;
-	if (pwm_regs == 0x40252D00) {
+	if ((uintptr_t)pwm_regs == 0x40252D00) {
 		*(volatile uint32_t *)(0x40252D08) = ((5) & (0xFFF)); // Set DIV
 		*(volatile uint32_t *)(0x40252D04) = (pwm_duty & (0xFF)); // Set Duty
 	} else {
@@ -53,13 +53,13 @@ static int pwm_rts5918_set_cycles(const struct device *dev, uint32_t channel,
 		pulse_cycles, pwm_div, pwm_duty);
 
 	if (flags == PWM_POLARITY_INVERTED) {
-		if (pwm_regs == 0x40252D00) {
+		if ((uintptr_t)pwm_regs == 0x40252D00) {
 			*(volatile uint32_t *)(0x40252D14) |= (0x1 << 29); // Set Revert
 		} else {
 			pwm_regs->ctrl |= PWM_CTRL_INVT;
 		}
 	}
-	if (pwm_regs == 0x40252D00) {
+	if ((uintptr_t)pwm_regs == 0x40252D00) {
 		*(volatile uint32_t *)(0x40252D00) |= (0x3); // Set as PWM mode
 		*(volatile uint32_t *)(0x40252D14) |= (0x1 << 31); // Enable LEDPWM
 	} else {
@@ -76,7 +76,7 @@ static int pwm_rts5918_get_cycles_per_sec(const struct device *dev, uint32_t cha
 	volatile struct pwm_regs *pwm_regs = pwm_config->pwm_regs;
 
 	if (cycles) {
-		if (pwm_regs == 0x40252D00) {
+		if ((uintptr_t)pwm_regs == 0x40252D00) {
 			*cycles = MHZ(8);
 		} else {
 			*cycles = PWM_CYCLE_PER_SEC;
@@ -119,7 +119,7 @@ static int pwm_rts5918_init(const struct device *dev)
 	}
 #endif
 	if(pwm_config->pwm_invert) {
-		if (pwm_regs == 0x40252D00) {
+		if ((uintptr_t)pwm_regs == 0x40252D00) {
 		*(volatile uint32_t *)(0x40252D14) |= (0x1 << 29); // Set Revert
 		*(volatile uint32_t *)(0x40252D00) |= (0x3); // Set as PWM mode
 		*(volatile uint32_t *)(0x40252D14) |= (0x1 << 31); // Enable LEDPWM
