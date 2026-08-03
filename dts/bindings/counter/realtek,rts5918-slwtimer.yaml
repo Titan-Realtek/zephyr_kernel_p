@@ -1,0 +1,28 @@
+# Copyright (c) 2023, Realtek Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+description: Realtek RTS5918 32bit slow timer
+
+compatible: "realtek,rts5918-slwtimer"
+
+include: rtc.yaml
+
+properties:
+    reg:
+      required: true
+
+    interrupts:
+      required: true
+
+    max-value:
+      type: int
+      required: false
+      description: Maximum counter value the instance can handle
+
+    clock-frequency:
+      required: false
+
+    prescaler:
+      type: int
+      required: false
+      description: Timer frequency equals clock-frequency divided by the prescaler value

@@ -99,4 +99,8 @@ source "drivers/timer/Kconfig.mtk_adsp"
 
 endmenu
 
+
+
+source "drivers/timer/Kconfig.realtek_rts5918_rtmr"
+
 endif # SYS_CLOCK_EXISTS

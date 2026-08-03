@@ -69,4 +69,8 @@ source "drivers/pinctrl/Kconfig.max32"
 
 rsource "renesas/Kconfig"
 
+
+
+source "drivers/pinctrl/Kconfig.realtek_rts5918"
+
 endif # PINCTRL

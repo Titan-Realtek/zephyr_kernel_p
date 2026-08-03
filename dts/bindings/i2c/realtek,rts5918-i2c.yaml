@@ -1,0 +1,45 @@
+# Copyright (c) 2025 Realtek, SIBG-SD7
+# SPDX-License-Identifier: Apache-2.0
+
+description: Realtek RTS5918 I2C node
+
+compatible: "realtek,rts5918-i2c"
+
+include: base.yaml
+
+properties:
+  dw-i2c-dev:
+    type: phandle
+    required: false
+    description: |
+      DesignWare i2c device
+
+  sda-timeout-value:
+    type: int
+    default: 30
+    description: |
+      Describe the SDA stuck at low timeout value, unit in ms
+
+  scl-timeout-value:
+    type: int
+    default: 30
+    description: |
+      Describe the SCL stuck at low timeout value, unit in ms
+
+  sda-gpio-pin:
+    type: int
+    default: 0
+    description: |
+      Describe the SDA gpio number used by the bus-recovery bit-bang
+      fallback in i2c_rts5918_recover_bus(). Default 0 means the
+      recovery fallback is not configured for this bus and would
+      target gpio0 if invoked. Phase 10.10: only the SCCON clock
+      enable path matters for normal i2c traffic; bus recovery is
+      a future improvement.
+
+  scl-gpio-pin:
+    type: int
+    default: 0
+    description: |
+      Describe the SCL gpio number used by the bus-recovery bit-bang
+      fallback. Same semantics as sda-gpio-pin (Phase 10.10).

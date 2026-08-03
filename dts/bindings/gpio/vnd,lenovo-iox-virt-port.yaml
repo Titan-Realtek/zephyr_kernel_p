@@ -1,0 +1,58 @@
+# Copyright (c) 2026 Bison RTS5918 EC porting
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Virtual port-byte node for a Lenovo Nct5635-style I/O expander chip
+  (KTS1622 / NCT5635Y / etc., 16-pin × 8-bit-per-byte). No Zephyr device
+  driver — exists only as a devicetree reference target so the
+  ecfw-zephyr/scripts/gen_poc_from_csv.py overlay generator can encode
+  pins via the `index` property to match what
+  ecfw-zephyr/Jupiter/peripheral/Nct5635/nct5635.c::IoSetExpander()
+  expects (port_number = chip_index * 2 + port_byte; bit_in_byte = 0..7).
+
+  The Lenovo source code (Jupiter/IoPort.c::IoSet → Nct5635 driver)
+  decodes the encoded `enum gpio_idx` value as:
+
+      port_number  = (idx >> 8) & 0x1FF   /* 0..3 for 2 chips */
+      bit_in_byte  = idx & 0x1F           /* 0..7 */
+
+  Standard Zephyr GPIO devicetree encoding via `gpios = <&node N>`
+  uses `(DT_PROP(node, index) << 8) | (DT_GPIO_PIN << 0)`. By making
+  each node represent ONE byte of an expander chip and setting `index`
+  to the Lenovo-internal port_number, the standard encoding produces
+  the exact value Nct5635.c expects, with no driver-side translation.
+
+  Bison maps four such virtual nodes onto two physical KTS1622 chips
+  on i2c_4:
+
+      expander1_p0: index = 0   (U5601 / KTS1622 @ 0x20, P0)
+      expander1_p1: index = 1   (U5601 / KTS1622 @ 0x20, P1)
+      expander2_p0: index = 2   (U5602 / KTS1622 @ 0x21, P0)
+      expander2_p1: index = 3   (U5602 / KTS1622 @ 0x21, P1)
+
+  The actual I2C addresses are configured separately in
+  Jupiter/peripheral/Nct5635/Nct5635.h via EXPANDER1_ADDRESS /
+  EXPANDER2_ADDRESS.
+
+compatible: "vnd,lenovo-iox-virt-port"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  "#gpio-cells":
+    const: 2
+  index:
+    type: int
+    required: true
+    description: |
+      Lenovo internal port_number = chip_index * 2 + port_byte_index.
+      Used by GPIO_VAL_FROM_NODE in middle/mdl_gpio_hub.h to encode
+      the port slot of each pin in `enum gpio_idx`.
+  ngpios:
+    type: int
+    required: true
+    description: Number of GPIO lines on this port byte (always 8).
+
+gpio-cells:
+  - pin
+  - flags

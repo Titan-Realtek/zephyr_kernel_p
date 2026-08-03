@@ -35,4 +35,8 @@ source "drivers/input/Kconfig.xpt2046"
 
 endmenu # Input Drivers
 
+
+
+source "drivers/input/Kconfig.rts5918"
+
 endif # INPUT

@@ -1,0 +1,71 @@
+# Copyright (c) 2023, Realtek, SIBG-SD7
+# SPDX-License-Identifier: Apache-2.0
+
+config ESPI_RTS5918
+	bool "Realtek RTS5918 eSPI Driver"
+	default y
+	depends on DT_HAS_REALTEK_RTS5918_ESPI_ENABLED
+	select KERNEL_MEM_POOL
+	help
+	  Enable the Realtek RTS5918 eSPI driver.
+
+config MAF_BUFFER_SIZE
+	int "eSPI Flash Channel MAF Buffer Size"
+	default 512
+	depends on ESPI_FLASH_CHANNEL
+	help
+	  The buffer size used for MAF Tr of flash channel.
+
+config ESPI_RTS5918_IOSHORT_RW
+	bool "Realtek RTS5918 IORW"
+	default n
+	help
+	  Enable RTS5918 eSPI Peripheral IORW
+
+config ESPI_PERIPHERAL_PM0_OBE_EVT_DATA
+	bool "Enable Promt0 event"
+	default n
+
+config ESPI_PERIPHERAL_HOST_CMD_PM1_PARAM_PORT_NUM
+	hex "Host I/O peripheral port number for ec host command parameters"
+	depends on ESPI_PERIPHERAL_EC_HOST_CMD
+	default 0x0086
+
+config ESPI_PERIPHERAL_PM1_OBE_EVT_DATA
+	bool "Enable Promt0 event"
+	default n
+
+config ESPI_PERIPHERAL_HOST_CMD_PM2_PARAM_PORT_NUM
+	hex "Host I/O peripheral port number for ec host command parameters"
+	depends on ESPI_PERIPHERAL_EC_HOST_CMD
+	default 0x0630
+
+config ESPI_PERIPHERAL_PM2_OBE_EVT_DATA
+	bool "Enable Promt0 event"
+	default n
+
+config ESPI_PERIPHERAL_HOST_CMD_PM3_PARAM_PORT_NUM
+	hex "Host I/O peripheral port number for ec host command parameters"
+	depends on ESPI_PERIPHERAL_EC_HOST_CMD
+	default 0x0618
+
+config ESPI_PERIPHERAL_PM3_OBE_EVT_DATA
+	bool "Enable Promt0 event"
+	default n
+
+config ESPI_RTS5918_TYPE_A
+	bool "Enable for RTS5918 type-A"
+	default n
+
+if ESPI_RTS5918
+
+	config ESPI_OOB_CHANNEL
+		default y
+
+	config ESPI_FLASH_CHANNEL
+		default y
+
+	config ESPI_PERIPHERAL_8042_KBC
+		default y
+
+endif # ESPI_RTS5918

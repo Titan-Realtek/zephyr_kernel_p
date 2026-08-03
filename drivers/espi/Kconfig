@@ -167,6 +167,7 @@ config ESPI_PERIPHERAL_HOST_CMD_PARAM_PORT_NUM
 	  accessing these package data. Also, ensure the port number selected
 	  doesn't clash with the existing ports.
 
+
 endif # ESPI_PERIPHERAL_CHANNEL
 
 config ESPI_OOB_CHANNEL_RX_ASYNC
@@ -190,5 +191,8 @@ config ESPI_TAF_INIT_PRIORITY
 	help
 	  Driver initialization priority for eSPI TAF driver. TAF driver must
 	  initialize after the ESPI driver.
+
+
+source "drivers/espi/Kconfig.rts5918"
 
 endif # ESPI

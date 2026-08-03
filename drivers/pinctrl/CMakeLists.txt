@@ -40,3 +40,4 @@ zephyr_library_sources_ifdef(CONFIG_PINCTRL_IMX_SCU pinctrl_imx_scu.c)
 zephyr_library_sources_ifdef(CONFIG_PINCTRL_MAX32 pinctrl_max32.c)
 
 add_subdirectory(renesas)
+zephyr_library_sources_ifdef(CONFIG_PINCTRL_REALTEK_RTS5918 pinctrl_realtek_rts5918.c)

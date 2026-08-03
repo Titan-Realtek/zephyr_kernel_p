@@ -1,0 +1,23 @@
+# Copyright (c) 2025, Realtek, SIBG-SD7
+# SPDX-License-Identifier: Apache-2.0
+
+description: Realtek RTS5918 PWM
+
+include: [pwm-controller.yaml, base.yaml, pinctrl-device.yaml]
+
+compatible: "realtek,rts5918-pwm"
+
+properties:
+    reg:
+      required: true
+
+    pwm-invert:
+      type: boolean
+
+    "#pwm-cells":
+      const: 3
+
+pwm-cells:
+    - channel
+    - period
+    - flags

@@ -88,6 +88,7 @@ config I2C_RTIO_CQ_SIZE
 	  is going to be 4 given the device address, register address, and a value
 	  to be read or written.
 
+
 endif # I2C_RTIO
 
 
@@ -230,5 +231,8 @@ config GPIO_I2C_SWITCH
 	depends on DT_HAS_GPIO_I2C_SWITCH_ENABLED
 	help
 	  Enable GPIO controlled I2C bus switch driver.
+
+
+source "drivers/i2c/Kconfig.rts5918"
 
 endif # I2C

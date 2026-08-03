@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2025 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+config SOC_FLASH_RTS5918
+	bool "Realtek RTS5918 flash driver"
+	default y
+	depends on DT_HAS_REALTEK_RTS5918_FLASH_CONTROLLER_ENABLED
+	select FLASH_HAS_PAGE_LAYOUT
+	select FLASH_HAS_DRIVER_ENABLED
+	select FLASH_HAS_EXPLICIT_ERASE
+	select FLASH_HAS_EX_OP
+	select HAS_FLASH_LOAD_OFFSET
+	help
+	  The flash driver includes support for read, write and
+	  erase flash operations. It also supports protection.
+	  The it8xxx2 flash size is 1M byte.
+
+config FLASH_RTS5918_SAFS
+	bool "change pin to external CS0 and set into 4 byte mode"
+	default n

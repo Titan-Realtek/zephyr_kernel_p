@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+description: |
+     This binding gives a base representation of the pins configuration
+
+compatible: "realtek,rts5918-pinctrl"
+
+include: [base.yaml, pinctrl-device.yaml, pincfg-node.yaml]
+
+properties:
+  reg:
+    required: true
+
+child-binding:
+  description: |
+    This binding gives a base representation of the pins configuration
+
+  include:
+    - name: pincfg-node.yaml
+      property-allowlist:
+        
+  properties:
+    pinmux:
+      type: int
+      required: false
+      description: Pinmux selection
+    voltage-1v8-enable:
+      type: boolean
+      description: |
+        Configure the pin to operate in 1.8 V mode rather than 3.3 V.
+        Used by rts5918 JTAG / SWJ pins which need 1.8 V signalling.
