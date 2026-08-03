@@ -9,6 +9,7 @@ config REALTEK_RTS5918_RTMR
 	default y if DT_HAS_REALTEK_RTS5918_RTMR_ENABLED
 	select TICKLESS_CAPABLE
 	select SYSTEM_TIMER_HAS_DISABLE_SUPPORT
+	select TIMER_HAS_64BIT_CYCLE_COUNTER
 	help
 	  This module implements a kernel device driver for the Realtek
 	  RTS5918/RTS5918/RTS5918 series RTOS timer.
