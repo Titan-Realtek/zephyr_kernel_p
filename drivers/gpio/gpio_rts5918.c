@@ -171,6 +171,7 @@ static int gpio_rts5918_configuration(const struct device *port, gpio_pin_t pin,
 		cfg_val &= ~GPIO_GCR_SCHEN_Msk;
 	}
 
+#if 0
 	/*
 	 * Only update MFCTRL when the caller explicitly selected a function
 	 * via the RTS5918_GPIO_MFCTRL_x flags. RTS5918_GPIO_MFCTRL_0 == 0,
@@ -201,6 +202,7 @@ static int gpio_rts5918_configuration(const struct device *port, gpio_pin_t pin,
 			return -EINVAL;
 		}
 	}
+#endif
 
 	*gcr = cfg_val;
 
