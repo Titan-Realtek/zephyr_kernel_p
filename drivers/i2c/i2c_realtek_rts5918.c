@@ -138,14 +138,15 @@ static int i2c_rts5918_reset_i2c(const struct device *dev)
  *
  * Original body kept in #if 0 below as reference for the future.
  */
+#if 0
 static int i2c_rts5918_recover_bus(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	return -ENOTSUP;
 }
 
-#if 0
-static int i2c_rts5918_recover_bus_orig(const struct device *dev)
+#else
+static int i2c_rts5918_recover_bus(const struct device *dev)
 {
 	static volatile GPIO_Type *pinctrl_base =
 		(volatile GPIO_Type *)(DT_REG_ADDR(DT_NODELABEL(pinctrl)));
@@ -356,6 +357,8 @@ static int i2c_rts5918_initialize(const struct device *dev)
 		LOG_ERR("SCCON not ready for i2c[%s]", dev->name);
 		return -ENODEV;
 	}
+	i2c_dw_register_recover_bus_cb(config->dw_i2c_dev, i2c_rts5918_recover_bus, dev);
+
 	ret = clock_control_on(config->clk_dev, (clock_control_subsys_t)&config->sccon_cfg);
 	if (ret != 0) {
 		LOG_ERR("enable i2c[%s] SCCON clock failed (%d)", dev->name, ret);
