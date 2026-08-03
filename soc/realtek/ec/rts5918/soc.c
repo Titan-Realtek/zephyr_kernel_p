@@ -55,6 +55,10 @@ static int soc_disable_vout_130(void)
 	*(uint32_t *)0x402214C4 = 0x00000001;	// enable
 	*(uint32_t *)0x40100170 |= (0x1 << 1);
 
+#ifdef	CONFIG_BOARD_RTS5918_OSPREY
+	//#define PUFOTP_BASE                 0x40300000UL
+	*(volatile uint32_t*)(0x40300000UL+0x6D8)=0xC; 	// boot select change from cs1 to cs0
+#endif
 	return 0;
 }
 SYS_INIT(soc_disable_vout_130, PRE_KERNEL_2, 5);
