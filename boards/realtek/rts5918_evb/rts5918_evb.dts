@@ -1,0 +1,77 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2024 Realtek Semiconductor Corporation, SIBG-SD7
+ *
+ */
+
+/dts-v1/;
+#include <realtek/ec/rts5918.dtsi>
+#include <realtek/ec/rts5918-pinctrl.dtsi>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "Realtek rts5918 Evaluation Board";
+	compatible = "realtek,rts5918-evb";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+		zephyr,flash = &flash0;
+	};
+};
+
+&uart0 {
+	status = "disabled";
+	current-speed = <115200>;
+};
+
+&uart0_wrapper {
+	status = "disabled";
+	pinctrl-0 = <&uart00_rx_gpio139 &uart00_tx_gpio140>;
+	pinctrl-names = "default";
+};
+
+&uart1 {
+	status = "disabled";
+	current-speed = <115200>;
+};
+/*
+&uart1_wrapper {
+	status = "disabled";
+	pinctrl-0 = <&uart01_rxa_gpio012 &uart01_rxa_gpio012_pin_sel &uart01_tx_gpio013>;
+	pinctrl-names = "default";
+};
+*/
+
+&uart1_wrapper {
+	status = "disabled";
+	pinctrl-0 = <&uart01_tx_gpio147 &uart01_rxb_gpio146 &uart01_rxb_gpio146_pin_sel >;
+	pinctrl-names = "default";
+};
+
+&uart2 {
+	status = "okay";
+	current-speed = <115200>;
+};
+
+&uart2_wrapper {
+	status = "okay";
+	pinctrl-0 = <&uart02_rxb_gpio113 &uart02_rxb_gpio113_pin_sel &uart02_tx_gpio116>;
+	pinctrl-names = "default";
+};
+
+&espi0 {
+	//status = "okay";
+	pinctrl-0 = < &espi_alert_gpio000 &espi_cs_gpio004
+				&espi_io3_gpio005 &espi_io2_gpio006
+				&espi_io1_gpio007 &espi_io0_gpio008
+				&espi_clk_gpio009 &espi_reset_gpio002
+				&espi_reset_gpio002_pin_sel>;
+	pinctrl-names = "default";
+};
+
+&swj_port {
+	status = "okay";
+};
