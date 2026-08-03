@@ -1,0 +1,13 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Map the generic i3c-target test aliases to this board's target-mode I3C
+ * instances. Adjust the phandles here to test other target instances.
+ */
+
+/ {
+	aliases {
+		i3c-target-0 = &i3c2;
+		i3c-target-1 = &i3c4;
+	};
+};
