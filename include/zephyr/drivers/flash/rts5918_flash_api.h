@@ -17,8 +17,17 @@ enum flash_rts5918_ex_ops {
 	FLASH_RTS5918_EX_OP_RD_SR2,
 	FLASH_RTS5918_EX_OP_SET_WP,
 	FLASH_RTS5918_EX_OP_GET_WP,
-    FLASH_RTS5918_EX_OP_3BYTE_MODE,
-    FLASH_RTS5918_EX_OP_4BYTE_MODE,
+	FLASH_RTS5918_EX_OP_3BYTE_MODE,
+	FLASH_RTS5918_EX_OP_4BYTE_MODE,
+	/*
+	 * Select the chip-select line used by subsequent flash_* ops on
+	 * this controller. `in` carries the CS index (0 or 1). The driver
+	 * maps it to SER = BIT(cs). Per-controller state, protected by the
+	 * driver's internal sem so read/write/erase on different CS cannot
+	 * interleave. Caller is responsible for re-selecting after power
+	 * transitions.
+	 */
+	FLASH_RTS5918_EX_OP_SELECT_CS,
 };
 
 /*
