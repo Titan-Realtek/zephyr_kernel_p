@@ -204,7 +204,7 @@ static void rts5918_adc_get_sample(const struct device *dev)
 	uint32_t idx;
 	uint32_t channels = data->channels;
 	uint32_t bit;
-	uint32_t *LPFDATA;
+	volatile uint32_t *LPFDATA;
 	uint32_t lpf_idx;
 	bool	 lpf_up_down;
 
