@@ -26,13 +26,60 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
 #include "boot_hal.h"
 #include "Driver_Flash.h"
 #include "flash_layout.h"
 #include "region_defs.h"
 #include "tfm_hal_device_header.h"
+#include "bootutil/bootutil_log.h"
 
 extern ARM_DRIVER_FLASH FLASH_DEV_NAME;
+
+/*
+ * Realtek LALU HW-crypto bring-up for BL2.
+ *
+ * BL2's mbedcrypto is built with CONFIG_ENABLE_LALU_SHA2, so MCUboot's image
+ * hash verification (boot_go_for_image_id) runs SHA-256 through the LALU
+ * engine. The LALU SHA-2 driver needs (a) its clocks enabled and (b)
+ * lalu_sha2_hw_init() to latch the SHA2/DMAC register bases into its internal
+ * state pointer (sha2_core). Neither happens by default on this platform, so
+ * without this the very first hash dereferences a NULL sha2_core and faults
+ * (BL2 stops right after "Image index: 1, Swap type: none").
+ *
+ * We do it in boot_platform_post_init(): bl2_main.c calls it after flash init
+ * and BEFORE the first boot_go_for_image_id(). Register values mirror the
+ * legacy rtkcrypto_init(); they are RTS5918 absolute physical bases (no
+ * Zephyr/CMSIS headers are on the BL2 platform include path).
+ */
+#define RTK_SHA2_REG_BASE       (0x40040000ul)
+#define RTK_SHA2DMA_REG_BASE    (0x40041000ul)
+/*
+ * Hardware HMAC/SHA mutex (struct lalu_sha2_core.mutex_status, offset 0xD00).
+ * The shared crypto engine gates access to its register file behind this
+ * semaphore: the SPE rtkcrypto wrapper reads it once to acquire ownership
+ * before every SHA operation, but MCUboot calls the LALU driver directly and
+ * never does, so BL2's first read of the SHA2 core (0x40040000) stalls on the
+ * bus. We acquire it once here; BL2 is single-threaded and the only crypto
+ * user, so it is never released (matches the SPE path, whose release is a nop).
+ */
+#define RTK_HMAC_MUTEX          (RTK_SHA2_REG_BASE + 0x00000D00ul)
+#define RTK_SYSTEM_REG_BASE     (0x40100000ul)
+#define RTK_SYSTEM_SYSCLKSEL    (RTK_SYSTEM_REG_BASE + 0x00000004ul)
+#define RTK_SYSTEM_IPCLK0       (RTK_SYSTEM_REG_BASE + 0x00000008ul)
+#define RTK_SYSTEM_IPCLK4       (RTK_SYSTEM_REG_BASE + 0x0000001Cul)
+#define RTK_SYSTEM_CLKGATING0   (RTK_SYSTEM_REG_BASE + 0x0000004Cul)
+#define RTK_SYSTEM_CLKGATING4   (RTK_SYSTEM_REG_BASE + 0x00000060ul)
+#define RTK_SYSTEM_IPRST0       (RTK_SYSTEM_REG_BASE + 0x00000064ul)
+#define RTK_SYSTEM_IPRST4       (RTK_SYSTEM_REG_BASE + 0x00000078ul)
+#define RTK_SYSTEM_LC           (RTK_SYSTEM_REG_BASE + 0x0000020Cul)
+/* IP bit positions, identical across IPCLKx / IPRSTx / CLKGATINGx banks. */
+#define RTK_LALU_BIT            (0x1ul << 8)    /* bank 4: LALU  */
+#define RTK_DMA_OTP_BITS        (0x3ul << 28)   /* bank 0: DMA(28) + OTP(29) */
+
+/* Provided by BL2's libmbedcrypto.a (library/lalu/lalu_sha2.c). */
+extern int lalu_sha2_hw_init(void *sha2_base_address, void *dmac_base_address);
+extern void lalu_sha256_starts_ret(int is224);
 
 /*
  * SRAM header address each image is linked/signed to run from, verified
@@ -77,6 +124,71 @@ int flash_device_base(uint8_t fd_id, uintptr_t *ret)
 {
     (void)fd_id;
     *ret = S_IMAGE_LOAD_BASE;   /* 0x20000000 -> S_CODE_START 0x2000B400 */
+    return 0;
+}
+
+/*
+ * Enable the LALU engine clocks and initialise its SHA-2 HW driver before any
+ * image is verified. Overrides the __WEAK boot_platform_post_init() in
+ * platform/ext/common/boot_hal_bl2.c (whose default body only runs the
+ * CRYPTO_HW_ACCELERATOR path, which this platform does not define).
+ */
+int32_t boot_platform_post_init(void)
+{
+    /* Enable the LC clock domain used as the LALU clock source. */
+    *(volatile uint32_t *)(RTK_SYSTEM_LC) |= 0x60000000ul;
+    /* Enable the LALU engine. */
+    *(volatile uint32_t *)(RTK_SYSTEM_REG_BASE) = 0xfffffffful;
+    /* Select LC as the LALU clock source. */
+    *(volatile uint32_t *)(RTK_SYSTEM_SYSCLKSEL) &= ~(0x3ul << 4);
+    /* --- 1. IP clocks on (LALU on bank 4; DMA+OTP on bank 0). --- */
+    *(volatile uint32_t *)(RTK_SYSTEM_IPCLK4) |= RTK_LALU_BIT;
+    *(volatile uint32_t *)(RTK_SYSTEM_IPCLK0) |= RTK_DMA_OTP_BITS;
+    __DSB();
+    __ISB();
+
+    /*
+     * --- 2. Bring the engines out of reset. ---
+     * BL2 does not run the Zephyr SoC init, so LALU/DMAC/OTP are still held in
+     * reset (IPRSTx bit == 0). With only the clocks enabled the SHA-2 core
+     * never leaves BUSY and lalu_sha256_starts_ret()'s
+     * "while (sha2_core->status & SHA2_STATUS_BUSY);" spins forever - which is
+     * exactly where BL2 stalled after "Image index: 1".
+     *
+     * Mirror the proven RTMR bring-up sequence (realtek_rts5918_rtmr):
+     * gate the clock, pulse the reset (assert bit=0 -> deassert bit=1), then
+     * ungate. IPRST bit==1 is the deasserted/running state; the assert->deassert
+     * pulse also clears any stale BUSY latched while the core was unclocked.
+     */
+    *(volatile uint32_t *)(RTK_SYSTEM_CLKGATING4) |= RTK_LALU_BIT;
+    *(volatile uint32_t *)(RTK_SYSTEM_CLKGATING0) |= RTK_DMA_OTP_BITS;
+    __DSB();
+    __ISB();
+
+    *(volatile uint32_t *)(RTK_SYSTEM_IPRST4) &= ~RTK_LALU_BIT;      /* assert  */
+    *(volatile uint32_t *)(RTK_SYSTEM_IPRST0) &= ~RTK_DMA_OTP_BITS;
+    __DSB();
+    __ISB();
+    *(volatile uint32_t *)(RTK_SYSTEM_IPRST4) |= RTK_LALU_BIT;       /* deassert */
+    *(volatile uint32_t *)(RTK_SYSTEM_IPRST0) |= RTK_DMA_OTP_BITS;
+    __DSB();
+    __ISB();
+
+    *(volatile uint32_t *)(RTK_SYSTEM_CLKGATING4) &= ~RTK_LALU_BIT;  /* ungate  */
+    *(volatile uint32_t *)(RTK_SYSTEM_CLKGATING0) &= ~RTK_DMA_OTP_BITS;
+    __DSB();
+    __ISB();
+
+    /* Latch SHA2 + DMAC register bases into the driver (sets sha2_core). */
+    lalu_sha2_hw_init((void *)RTK_SHA2_REG_BASE, (void *)RTK_SHA2DMA_REG_BASE);
+
+    /*
+     * Acquire the hardware HMAC/SHA mutex before touching the SHA2 core. This
+     * is the one step the SPE rtkcrypto path does that MCUboot's direct LALU
+     * calls do not; without it BL2's first SHA2 register read stalls the bus.
+     */
+    (void)*(volatile uint32_t *)(RTK_HMAC_MUTEX);
+
     return 0;
 }
 

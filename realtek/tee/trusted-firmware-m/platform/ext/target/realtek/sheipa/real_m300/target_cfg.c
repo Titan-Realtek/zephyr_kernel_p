@@ -93,6 +93,30 @@ extern ARM_DRIVER_MPC Driver_SRAM1_MPC, Driver_SRAM2_MPC;
 #define BBRAM_BASE_NS   (0x20200000)
 #define BBRAM_LIMIT_NS  (0x202000FF)
 
+/* HW-crypto engine grid that MUST remain Secure even though it sits inside the
+ * 0x40000000 NS peripheral window: SHA2 (0x40040000), SHA2DMA (0x40041000),
+ * SHA3 (0x40042000), AES (0x40043000). The SPE's mbedcrypto (CONFIG_ENABLE_
+ * LALU_SHA2) drives these registers directly; if SAU marks them NS the secure
+ * accesses become Non-Secure and the crypto IP's global control registers
+ * (DMA_EN/ch_en) silently reject the NS writes, so the DMA never enables and
+ * the first SHA hangs (SPE stall after "Provision entropy seed... complete").
+ * NS FW reaches crypto via PSA IPC, not these registers, so it does not need
+ * them NS. Carve this range out of the NS peripheral region below. */
+#define CRYPTO_ENGINE_BASE_S    (0x40040000)
+/* Upper bound extended from 0x40043FFF to 0x40046FFF so the LALU key manager
+ * (KEYGMGR_BASE = 0x40046000, used by LALU GCM/AES setkey) is also SAU-Secure;
+ * otherwise the SPE's NS access to it is rejected -> BusFault in
+ * load_key_to_engine(). Covers SHA2/SHA2DMA/SHA3/AES + key manager. */
+#define CRYPTO_ENGINE_LIMIT_S   (0x40046FFF)
+
+/* LALU PKE engine block, carved SAU-Secure for the SPE only (SPE-side ECDSA
+ * scalar-mul via lalu_ecp_mul_simplified touches these; NS reaches ECDSA via
+ * PSA IPC). Covers PKE regs (0x40080000, incl. pke_mutex @+0x34), MMEM
+ * (0x40090000), TMEM (0x400A0000) and IMEM (0x400B0000). BL2 does not use LALU
+ * PKE and cannot spare the extra SAU region, so the split is #ifndef BL2. */
+#define PKE_ENGINE_BASE_S       (0x40080000)
+#define PKE_ENGINE_LIMIT_S      (0x400BFFFF)
+
 /* Enable system reset request for CPU 0 */
 #define ENABLE_CPU0_SYSTEM_RESET_REQUEST (1U << 4U)
 
@@ -312,30 +336,42 @@ const struct sau_cfg_t sau_cfg[] = {
         (uint32_t)&REGION_NAME(Image$$, VENEER_ALIGN, $$Limit) - 1,
         true,
     },
+    /* NS peripheral window, split around the Secure HW-crypto engine grid
+     * (see CRYPTO_ENGINE_BASE_S). Lower half: 0x40000000..0x4003FFFF NS.
+     * NOTE: this replaces the upstream PSA_FF_TEST_SECURE_UART2 split that used
+     * to carve UART2 (0x40202000) Secure. That carve was inert here (secure/NS
+     * console both use UART0 = Driver_USART0; UART2-secure only serves the PSA
+     * FF test suite, which this build does not run) so it was dropped in favour
+     * of the crypto carve, keeping the SPE within the 8-region SAU limit. */
     {
         PERIPHERALS_BASE_NS_START,
-#if (defined(SECURE_UART1) && defined(PSA_FF_TEST_SECURE_UART2))
-        (UART1_BASE_NS - 1),
+        (CRYPTO_ENGINE_BASE_S - 1),
         false,
     },
+    /* Crypto engine 0x40040000..0x40046FFF is left uncovered => SAU-default
+     * Secure (includes the key manager at 0x40046000). */
+#ifdef BL2
+    /* BL2: single upper NS window (no LALU PKE use; keep within SAU region
+     * budget). 0x40047000..0x5007FFFF NS. */
     {
-        UART3_BASE_NS,
-#elif defined(PSA_FF_TEST_SECURE_UART2)
-        (UART2_BASE_NS - 1),
-        false,
-    },
-    {
-        UART3_BASE_NS,
-#elif defined(SECURE_UART1)
-        (UART1_BASE_NS - 1),
-        false,
-    },
-    {
-        UART2_BASE_NS,
-#endif
+        (CRYPTO_ENGINE_LIMIT_S + 1),
         PERIPHERALS_BASE_NS_END,
         false,
     },
+#else
+    /* SPE: split the upper NS window around the LALU PKE block so
+     * 0x40080000..0x400BFFFF stays SAU-default Secure. */
+    {
+        (CRYPTO_ENGINE_LIMIT_S + 1),    /* 0x40047000 */
+        (PKE_ENGINE_BASE_S - 1),        /* 0x4007FFFF */
+        false,
+    },
+    {
+        (PKE_ENGINE_LIMIT_S + 1),       /* 0x400C0000 */
+        PERIPHERALS_BASE_NS_END,
+        false,
+    },
+#endif
     {
         SPIC_BASE_NS,
         SPIC_LIMIT_NS,

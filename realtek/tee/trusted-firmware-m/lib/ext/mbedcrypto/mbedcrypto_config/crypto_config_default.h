@@ -68,7 +68,7 @@
 #define PSA_WANT_ALG_RSA_PKCS1V15_CRYPT         1
 #define PSA_WANT_ALG_RSA_PKCS1V15_SIGN          1
 #define PSA_WANT_ALG_RSA_PSS                    1
-//#define PSA_WANT_ALG_SHA_1                      1
+#define PSA_WANT_ALG_SHA_1                      1  /* NS rtkcrypto.c sha(SHA1) -> psa_hash_compute(PSA_ALG_SHA_1) needs SHA-1 in crypto service */
 #define PSA_WANT_ALG_SHA_224                    1
 #define PSA_WANT_ALG_SHA_256                    1
 #define PSA_WANT_ALG_SHA_384                    1
