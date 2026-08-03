@@ -36,7 +36,7 @@ typedef uint32_t pinctrl_soc_pin_t;
 
 #define Z_PINCTRL_STATE_PINCFG_INIT(node_id)							\
 	   (DT_PROP(node_id, bias_pull_down)              << REALTEK_RTS5918_PD_POS)			\
-	 | (DT_PROP(node_id, bias_pull_up)              << REALTEK_RTS5918_PU_POS)               \ 
+	 | (DT_PROP(node_id, bias_pull_up)              << REALTEK_RTS5918_PU_POS)               \
 	 | (DT_PROP(node_id, input_schmitt_enable) << REALTEK_RTS5918_SCHMITTER_POS)                \
 	 | (DT_PROP(node_id, input_enable) << REALTEK_RTS5918_INPUT_DETECTION_POS)               \
 	 | (DT_PROP(node_id, voltage_1v8_enable) << REALTEK_RTS5918_VOLTAGE_POS)                 \
