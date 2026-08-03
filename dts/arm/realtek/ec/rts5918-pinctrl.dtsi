@@ -1360,6 +1360,32 @@
 		input-enable;
 		input-schmitt-enable;
 	};
+    /omit-if-no-ref/ i3c04_scl_gpio014: i3c04_scl_gpio014
+    {
+            pinmux = <REALTEK_RTS5918_PINMUX(14, FUNC2)>;
+            input-enable;
+            input-schmitt-enable;
+    };
+    /omit-if-no-ref/ i3c04_sda_gpio017: i3c04_sda_gpio017
+    {
+            pinmux = <REALTEK_RTS5918_PINMUX(17, FUNC2)>;
+            input-enable;
+            input-schmitt-enable;
+    };
+    /omit-if-no-ref/ i3c04_scl_gpio014_pin_sel: i3c04_scl_gpio014_pin_sel
+    {
+            pinmux = <REALTEK_RTS5918_PINMUX(
+                    REALTEK_RTS5918_PIN_SEL(IXC_INPUT, BIT_LENGTH_1, 0, 17), 0)>;
+            input-enable;
+            input-schmitt-enable;
+    };
+    /omit-if-no-ref/ i3c04_sda_gpio017_pin_sel: i3c04_sda_gpio017_pin_sel
+    {
+            pinmux = <REALTEK_RTS5918_PINMUX(
+                    REALTEK_RTS5918_PIN_SEL(IXC_INPUT, BIT_LENGTH_1, 0, 18), 0)>;
+            input-enable;
+            input-schmitt-enable;
+    };
 	/omit-if-no-ref/ i3c03_scl_gpio100_pin_sel: i3c03_scl_gpio100_pin_sel
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(
