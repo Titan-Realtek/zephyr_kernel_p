@@ -11,14 +11,14 @@
  *     so a hot-joined target that is declared under the controller node (by
  *     PID) gets a dynamic address and shows up in the attached device list.
  *     `i3c_controller daa` also runs a controller-initiated DAA on demand.
- *   - IBI: `i3c_controller ibi-enable` registers an IBI callback on each addressed,
+ *   - IBI: `i3c_controller ibi_enable` registers an IBI callback on each addressed,
  *     IBI-capable target and sends ENEC(INTR) so the target may raise IBIs.
  *     Received IBIs are logged from the callback.
  *
  * Typical flow:
  *   1. Boot; the app enumerates and enables IBI on any present target.
  *   2. (Hot Join) power/plug the target -> it hot-joins -> `i3c_controller list` to
- *      see it -> `i3c_controller ibi-enable` to enable its IBI.
+ *      see it -> `i3c_controller ibi_enable` to enable its IBI.
  *   3. Target raises an IBI -> logged here as "IBI from 0x.. : ...".
  */
 
@@ -90,7 +90,7 @@ static void ctrl_list(void)
 	}
 }
 
-/* Armed by `i3c_controller ibi-enable`: auto-ENEC any target that (hot-)joins. */
+/* Armed by `i3c_controller ibi_enable`: auto-ENEC any target that (hot-)joins. */
 static volatile bool auto_ibi;
 
 /*
@@ -231,9 +231,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		  cmd_daa),
 	SHELL_CMD(list, NULL, "List attached I3C devices", cmd_list),
 	SHELL_CMD(reg, NULL, "Dump CCR/CSR/EC (HJ-accept) registers", cmd_reg),
-	SHELL_CMD(ibi - enable, NULL, "Arm auto-IBI: (hot-)joined targets get ENEC'd automatically",
+	SHELL_CMD(ibi_enable, NULL, "Arm auto-IBI: (hot-)joined targets get ENEC'd automatically",
 		  cmd_ibi_enable),
-	SHELL_CMD(ibi - disable, NULL, "Disarm auto-IBI and DISEC all targets", cmd_ibi_disable),
+	SHELL_CMD(ibi_disable, NULL, "Disarm auto-IBI and DISEC all targets", cmd_ibi_disable),
 	SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(i3c_controller, &ctrl_subcmds, "I3C controller HJ/IBI test controls", NULL);
@@ -248,11 +248,11 @@ int main(void)
 		return 0;
 	}
 
-	/* Run 'i3c_controller ibi-enable' once to arm. After that, when a target sends a
+	/* Run 'i3c_controller ibi_enable' once to arm. After that, when a target sends a
 	 * Hot Join the core auto-runs DAA and this app auto-ENECs it -- no further
-	 * commands needed. 'i3c_controller list' shows devices; 'ibi-disable' disarms.
+	 * commands needed. 'i3c_controller list' shows devices; 'ibi_disable' disarms.
 	 */
-	LOG_INF("%s: controller ready; run 'i3c_controller ibi-enable' to arm", ctrl_dev->name);
+	LOG_INF("%s: controller ready; run 'i3c_controller ibi_enable' to arm", ctrl_dev->name);
 
 	return 0;
 }

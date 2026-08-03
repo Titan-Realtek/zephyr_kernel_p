@@ -348,13 +348,13 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 		      1, 1),
 	SHELL_CMD_ARG(ibi, NULL, "Case 2: IBI with MDB only. Usage: i3c_target ibi [target-index]",
 		      cmd_echo_ibi, 1, 1),
-	SHELL_CMD_ARG(ibi - none, NULL,
+	SHELL_CMD_ARG(ibi_none, NULL,
 		      "Case 1: IBI without payload (needs BCR bit2=0). "
-		      "Usage: i3c_target ibi-none [target-index]",
+		      "Usage: i3c_target ibi_none [target-index]",
 		      cmd_echo_ibi_none, 1, 1),
-	SHELL_CMD_ARG(ibi - big, NULL,
+	SHELL_CMD_ARG(ibi_big, NULL,
 		      "Case 3: IBI with MDB + max single-FIFO payload (~60B; larger needs DMA). "
-		      "Usage: i3c_target ibi-big [target-index]",
+		      "Usage: i3c_target ibi_big [target-index]",
 		      cmd_echo_ibi_big, 1, 1),
 	SHELL_SUBCMD_SET_END);
 
