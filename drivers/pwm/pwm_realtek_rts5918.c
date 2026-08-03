@@ -19,7 +19,7 @@
 
 LOG_MODULE_REGISTER(pwm, CONFIG_PWM_LOG_LEVEL);
 
-#define PWM_CYCLE_PER_SEC MHZ(50)
+#define PWM_CYCLE_PER_SEC MHZ(25)
 
 struct pwm_rts5918_config {
 	volatile struct pwm_regs *pwm_regs;
@@ -47,8 +47,12 @@ static int pwm_rts5918_set_cycles(const struct device *dev, uint32_t channel,
 		// *(volatile uint32_t *)(0x40252D04) = (pwm_duty & (0xFF)); // Set Duty
 	if(pwm_config->pwm_led) {
 		volatile uint32_t *base = (volatile uint32_t *)pwm_regs;
-		base[0x8] = ((5) & (0xFFF)); // Set DIV
-		base[0x4] = (pwm_duty & (0xFF)); // Set Duty
+		base[0x8/4] = ((0) & (0xFFF)); // Set DIV
+		pwm_duty = (pwm_duty * 255) / pwm_div;
+		if(pwm_duty > 0xf0){
+			pwm_duty = 0xf0;
+		}
+		base[0x4/4] = (pwm_duty & (0xFF)); // Set Duty
 	} else {
 		pwm_regs->div = pwm_div;
 		pwm_regs->duty = pwm_duty;
@@ -62,7 +66,7 @@ static int pwm_rts5918_set_cycles(const struct device *dev, uint32_t channel,
 		// 	*(volatile uint32_t *)(0x40252D14) |= (0x1 << 29); // Set Revert
 		if(pwm_config->pwm_led) {
 			volatile uint32_t *base = (volatile uint32_t *)pwm_regs;
-			base[0x14] |= (0x1 << 29); // Set Revert
+			base[0x14/4] |= (0x1 << 29); // Set Revert
 		} else {
 			pwm_regs->ctrl |= PWM_CTRL_INVT;
 		}
@@ -73,7 +77,7 @@ static int pwm_rts5918_set_cycles(const struct device *dev, uint32_t channel,
 	if(pwm_config->pwm_led) {
 		volatile uint32_t *base = (volatile uint32_t *)pwm_regs;
 		base[0] |= (0x3); // Set as PWM mode
-		base[0x14] |= (0x1 << 31); // Enable LEDPWM
+		base[0x14/4] |= (0x1 << 31); // Enable LEDPWM
 	} else {
 		pwm_regs->ctrl |= PWM_CTRL_EN;
 	}
@@ -89,7 +93,7 @@ static int pwm_rts5918_get_cycles_per_sec(const struct device *dev, uint32_t cha
 	if (cycles) {
 		// if ((uintptr_t)pwm_regs == 0x40252D00) {
 		if(pwm_config->pwm_led) {
-			*cycles = MHZ(8);
+			*cycles = KHZ(32);
 		} else {
 			*cycles = PWM_CYCLE_PER_SEC;
 		}
@@ -137,9 +141,9 @@ static int pwm_rts5918_init(const struct device *dev)
 		// *(volatile uint32_t *)(0x40252D14) |= (0x1 << 31); // Enable LEDPWM
 		if(pwm_config->pwm_led) {
 			volatile uint32_t *base = (volatile uint32_t *)pwm_regs;
-			base[0x4] |= (0x3); // Set as PWM mode
-			base[0x14] |= (0x1 << 29); // Set Revert
-			base[0x14] |= (0x1 << 31); // Enable LEDPWM
+			base[0x0] |= (0x3); // Set as PWM mode
+			base[0x14/4] |= (0x1 << 29); // Set Revert
+			base[0x14/4] |= (0x1 << 31); // Enable LEDPWM
 		} else {
 			pwm_regs->ctrl |= PWM_CTRL_INVT;
 		}
