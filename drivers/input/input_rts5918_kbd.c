@@ -109,7 +109,18 @@ static void rts5918_kbd_isr(const struct device *dev)
 static void rts5918_kbd_set_detect_mode(const struct device *dev, bool enable)
 {
 	const struct rts5918_kbd_config *config = dev->config;
+	unsigned int key;
 
+	/* Race fix: this function pokes the KSI4/KSI5 GPIO GCR registers
+	 * (0x40230170 / 0x40230174) directly, bypassing the GPIO driver. The
+	 * GPIO driver also issues read-modify-writes on those exact registers
+	 * via gpio_rts5918_intr_config (and the GPIO ISR reads INTSTS on the
+	 * same bank). Without irq_lock, a GPIO ISR or another thread's GPIO
+	 * reconfiguration could land between our LD-OR-ST sequences here and
+	 * either lose this driver's wakeup/detect bits or scramble the GPIO
+	 * driver's INTEN bookkeeping.
+	 */
+	key = irq_lock();
 	if (enable) {
 		/* W/C interrupt status of KSI pins */
 		rts5918_intc_isr_clear(dev);
@@ -117,12 +128,13 @@ static void rts5918_kbd_set_detect_mode(const struct device *dev, bool enable)
 		*(volatile uint32_t *)(0x40230174) |= (0x1 << 31);
 		irq_enable(config->irq);
 		*(volatile uint32_t *)(0x40230170) |= (0x1 << 28);
-		*(volatile uint32_t *)(0x40230174) |= (0x1 << 28);		
+		*(volatile uint32_t *)(0x40230174) |= (0x1 << 28);
 	} else {
 		irq_disable(config->irq);
 		*(volatile uint32_t *)(0x40230170) &= ~(0x1 << 28);
-		*(volatile uint32_t *)(0x40230174) &= ~(0x1 << 28);		
+		*(volatile uint32_t *)(0x40230174) &= ~(0x1 << 28);
 	}
+	irq_unlock(key);
 }
 
 static int rts5918_kbd_init(const struct device *dev)
