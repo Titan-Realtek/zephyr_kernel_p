@@ -171,22 +171,35 @@ static int gpio_rts5918_configuration(const struct device *port, gpio_pin_t pin,
 		cfg_val &= ~GPIO_GCR_SCHEN_Msk;
 	}
 
-	cfg_val &= ~GPIO_GCR_MFCTRL_Msk;
-	switch (flags & RTS5918_GPIO_MFCTRL_MASK) {
-	case RTS5918_GPIO_MFCTRL_0:
-		cfg_val |= (0U << GPIO_GCR_MFCTRL_Pos);
-		break;
-	case RTS5918_GPIO_MFCTRL_1:
-		cfg_val |= (1U << GPIO_GCR_MFCTRL_Pos);
-		break;
-	case RTS5918_GPIO_MFCTRL_2:
-		cfg_val |= (2U << GPIO_GCR_MFCTRL_Pos);
-		break;
-	case RTS5918_GPIO_MFCTRL_3:
-		cfg_val |= (3U << GPIO_GCR_MFCTRL_Pos);
-		break;
-	default:
-		return -EINVAL;
+	/*
+	 * Only update MFCTRL when the caller explicitly selected a function
+	 * via the RTS5918_GPIO_MFCTRL_x flags. RTS5918_GPIO_MFCTRL_0 == 0,
+	 * so a plain `gpio_pin_configure(..., GPIO_INPUT)` would otherwise
+	 * fall into "case MFCTRL_0" and reset MFCTRL to plain GPIO,
+	 * clobbering any pinctrl alt-function previously set on the pad
+	 * (e.g. by drv_pinctrl_rtk_set_func() or pinctrl-0 in DT).
+	 *
+	 * Preserving the existing MFCTRL when no MFCTRL_x bit is in flags
+	 * lets pinctrl drivers keep ownership of the alt-function field.
+	 */
+	if (flags & RTS5918_GPIO_MFCTRL_MASK) {
+		cfg_val &= ~GPIO_GCR_MFCTRL_Msk;
+		switch (flags & RTS5918_GPIO_MFCTRL_MASK) {
+		case RTS5918_GPIO_MFCTRL_0:
+			cfg_val |= (0U << GPIO_GCR_MFCTRL_Pos);
+			break;
+		case RTS5918_GPIO_MFCTRL_1:
+			cfg_val |= (1U << GPIO_GCR_MFCTRL_Pos);
+			break;
+		case RTS5918_GPIO_MFCTRL_2:
+			cfg_val |= (2U << GPIO_GCR_MFCTRL_Pos);
+			break;
+		case RTS5918_GPIO_MFCTRL_3:
+			cfg_val |= (3U << GPIO_GCR_MFCTRL_Pos);
+			break;
+		default:
+			return -EINVAL;
+		}
 	}
 
 	*gcr = cfg_val;
