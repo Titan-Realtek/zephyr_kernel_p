@@ -431,7 +431,7 @@ typedef struct rtk_i3c_ctx {
 	rtk_i3c_tx_buffer tx_buffer;
 	rtk_i3c_rx_buffer ibi_buffer;
 
-#if defined(CONFIG_RTS5918_I3C_CTRL) || defined(__DOXYGEN__)
+#if defined(CONFIG_RTK_I3C_CTRL) || defined(__DOXYGEN__)
 	rtk_i3c_tagt_char_info tagt_char_info; /**< Current Target characteristics
 						  information during DAA phase */
 #endif
@@ -447,7 +447,7 @@ typedef struct rtk_i3c_ctx {
  */
 void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *config);
 
-#if defined(CONFIG_RTS5918_I3C_CTRL) || defined(__DOXYGEN__)
+#if defined(CONFIG_RTK_I3C_CTRL) || defined(__DOXYGEN__)
 /**
  * @brief Initialize I3C controller
  * @param ctx Pointer to I3C context
@@ -499,9 +499,9 @@ int rtk_i3c_ibi_read(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg);
  */
 int rtk_i3c_ctrl_deinit(rtk_i3c_ctx *ctx);
 
-#endif /* defined(CONFIG_RTS5918_I3C_CTRL) || ... */
+#endif /* defined(CONFIG_RTK_I3C_CTRL) || ... */
 
-#if defined(CONFIG_RTS5918_I3C_TAGT) || defined(__DOXYGEN__)
+#if defined(CONFIG_RTK_I3C_TAGT) || defined(__DOXYGEN__)
 /**
  * @brief Initialize I3C target
  * @param ctx Pointer to I3C context

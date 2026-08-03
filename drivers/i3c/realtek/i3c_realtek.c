@@ -25,25 +25,20 @@
 #include "rtk_i3c_bus.h"
 #include "port_i3c.h"
 
-LOG_MODULE_REGISTER(i3c_realtek_rts5918, CONFIG_I3C_REALTEK_RTS5918_LOG_LEVEL);
+LOG_MODULE_REGISTER(i3c_realtek, CONFIG_I3C_REALTEK_LOG_LEVEL);
 
-#define I3C_REALTEK_RTS5918_TYP_I2C_RATE     400000U
-#define I3C_REALTEK_RTS5918_TYP_I3C_PP_RATE  12500000U
-#define I3C_REALTEK_RTS5918_TRANSFER_TIMEOUT K_MSEC(1000)
-#define I3C_REALTEK_RTS5918_ADDR_SLOT_BITS   32U
-#define I3C_REALTEK_RTS5918_ADDR_SLOT_WORDS                                                        \
-	ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_RTS5918_ADDR_SLOT_BITS)
-#define I3C_REALTEK_RTS5918_MAX_DEVS    RTK_I3C_MAX_TAGT_COUNT
-#define I3C_REALTEK_RTS5918_DEFAULT_PID 0x04ba00001000ULL
-#define I3C_REALTEK_RTS5918_DEFAULT_BCR 0x1f
-#define I3C_REALTEK_RTS5918_DEFAULT_DCR 0xc6
+#define I3C_REALTEK_ADDR_SLOT_BITS  32U
+#define I3C_REALTEK_ADDR_SLOT_WORDS ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_ADDR_SLOT_BITS)
+#define I3C_REALTEK_MAX_DEVS        RTK_I3C_MAX_TAGT_COUNT
 
-struct i3c_realtek_rts5918_config {
+struct i3c_realtek_config {
 	struct i3c_driver_config common;
 	uintptr_t base;
 	const struct pinctrl_dev_config *pincfg;
 	const struct device *clock_dev;
 	struct rts5918_sccon_subsys sccon_cfg;
+	uint32_t i3c_freq_hz;
+	uint32_t i3c_od_scl_hz;
 	uint8_t instance_id;
 	uint8_t role;
 	uint8_t static_addr;
@@ -56,7 +51,7 @@ struct i3c_realtek_rts5918_config {
 	void (*irq_config_func)(const struct device *dev);
 };
 
-struct i3c_realtek_rts5918_data {
+struct i3c_realtek_data {
 	struct i3c_driver_data common;
 	struct k_mutex bus_lock;
 	struct k_sem ccc_end;
@@ -64,14 +59,14 @@ struct i3c_realtek_rts5918_data {
 	uint32_t num_xfer;
 	rtk_i3c_ctx rtk_ctx;
 	rtk_i3c_cfg rtk_cfg;
-	rtk_i3c_bus_tagt_item tagt_table[I3C_REALTEK_RTS5918_MAX_DEVS];
-	uint32_t addr_slots[I3C_REALTEK_RTS5918_ADDR_SLOT_WORDS];
+	rtk_i3c_bus_tagt_item tagt_table[I3C_REALTEK_MAX_DEVS];
+	uint32_t addr_slots[I3C_REALTEK_ADDR_SLOT_WORDS];
 	struct i3c_target_config *target_config;
 };
 
-static const struct device *i3c_realtek_rts5918_devices[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
+static const struct device *i3c_realtek_devices[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
 
-static int i3c_realtek_rts5918_err_to_errno(int ret)
+static int i3c_realtek_err_to_errno(int ret)
 {
 	if (ret == 0) {
 		return 0;
@@ -98,16 +93,16 @@ uintptr_t plat_i3c_get_base(uint8_t instance_id)
 {
 	const struct device *dev;
 
-	if (instance_id >= ARRAY_SIZE(i3c_realtek_rts5918_devices)) {
+	if (instance_id >= ARRAY_SIZE(i3c_realtek_devices)) {
 		return 0;
 	}
 
-	dev = i3c_realtek_rts5918_devices[instance_id];
+	dev = i3c_realtek_devices[instance_id];
 	if (dev == NULL) {
 		return 0;
 	}
 
-	return ((const struct i3c_realtek_rts5918_config *)dev->config)->base;
+	return ((const struct i3c_realtek_config *)dev->config)->base;
 }
 
 void plat_i3c_init_isr(rtk_i3c_ctx *ctx, uintptr_t vector)
@@ -116,23 +111,23 @@ void plat_i3c_init_isr(rtk_i3c_ctx *ctx, uintptr_t vector)
 	ARG_UNUSED(vector);
 }
 
-static void i3c_realtek_rts5918_isr(const struct device *dev)
+static void i3c_realtek_isr(const struct device *dev)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
 	rtk_i3c_isr(&data->rtk_ctx);
 }
 
-static int i3c_realtek_rts5918_attach_i3c_device(const struct device *dev,
-						 struct i3c_device_desc *target, uint8_t addr)
+static int i3c_realtek_attach_i3c_device(const struct device *dev, struct i3c_device_desc *target,
+					 uint8_t addr)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	const char *name = target->dev ? target->dev->name : "i3c";
 
-	for (uint8_t i = 0; i < I3C_REALTEK_RTS5918_MAX_DEVS; i++) {
+	for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
 		if (data->tagt_table[i].info.char_info.pid == 0 ||
 		    data->tagt_table[i].info.char_info.pid == target->pid) {
-			int ret = i3c_realtek_rts5918_err_to_errno(rtk_i3c_bus_init_tagt_table(
+			int ret = i3c_realtek_err_to_errno(rtk_i3c_bus_init_tagt_table(
 				&data->rtk_ctx, i, name, addr, target->static_addr, target->pid,
 				false));
 
@@ -147,20 +142,18 @@ static int i3c_realtek_rts5918_attach_i3c_device(const struct device *dev,
 	return -ENOSPC;
 }
 
-static int i3c_realtek_rts5918_reattach_i3c_device(const struct device *dev,
-						   struct i3c_device_desc *target,
-						   uint8_t old_dyn_addr)
+static int i3c_realtek_reattach_i3c_device(const struct device *dev, struct i3c_device_desc *target,
+					   uint8_t old_dyn_addr)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
-	return i3c_realtek_rts5918_err_to_errno(rtk_i3c_bus_reattach_tagt(
+	return i3c_realtek_err_to_errno(rtk_i3c_bus_reattach_tagt(
 		&data->rtk_ctx, old_dyn_addr, target->dynamic_addr, target->static_addr));
 }
 
-static int i3c_realtek_rts5918_detach_i3c_device(const struct device *dev,
-						 struct i3c_device_desc *target)
+static int i3c_realtek_detach_i3c_device(const struct device *dev, struct i3c_device_desc *target)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
 	if (target->dynamic_addr != 0U) {
 		rtk_i3c_bus_free_addr(&data->rtk_ctx, target->dynamic_addr);
@@ -169,10 +162,10 @@ static int i3c_realtek_rts5918_detach_i3c_device(const struct device *dev,
 	return 0;
 }
 
-static int i3c_realtek_rts5918_address_slots_init(const struct device *dev)
+static int i3c_realtek_address_slots_init(const struct device *dev)
 {
-	const struct i3c_realtek_rts5918_config *config = dev->config;
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	const struct i3c_realtek_config *config = dev->config;
+	struct i3c_realtek_data *data = dev->data;
 	uint8_t controller_da;
 	int ret;
 
@@ -203,12 +196,11 @@ static int i3c_realtek_rts5918_address_slots_init(const struct device *dev)
 	return 0;
 }
 
-static void i3c_realtek_rts5918_handle_daa_phase(const struct device *dev,
-						 rtk_i3c_tagt_char_info *tagt_char_info,
-						 uint8_t *dyn_addr)
+static void i3c_realtek_handle_daa_phase(const struct device *dev,
+					 rtk_i3c_tagt_char_info *tagt_char_info, uint8_t *dyn_addr)
 {
-	const struct i3c_realtek_rts5918_config *config = dev->config;
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	const struct i3c_realtek_config *config = dev->config;
+	struct i3c_realtek_data *data = dev->data;
 	struct i3c_device_desc *target = NULL;
 	uint8_t assigned_addr = 0U;
 	int ret;
@@ -244,7 +236,7 @@ static void i3c_realtek_rts5918_handle_daa_phase(const struct device *dev,
 		target->bcr = tagt_char_info->bcr;
 		target->dcr = tagt_char_info->dcr;
 
-		for (uint8_t i = 0; i < I3C_REALTEK_RTS5918_MAX_DEVS; i++) {
+		for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
 			if (!data->tagt_table[i].active ||
 			    data->tagt_table[i].info.char_info.pid == tagt_char_info->pid ||
 			    data->tagt_table[i].info.char_info.pid == target->pid) {
@@ -258,19 +250,18 @@ static void i3c_realtek_rts5918_handle_daa_phase(const struct device *dev,
 	}
 }
 
-static void i3c_realtek_rts5918_hal_callback(rtk_i3c_callback_args *const args)
+static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 {
 	const struct device *dev = (const struct device *)args->ctx;
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	const struct i3c_target_callbacks *target_cb;
 
 	switch (args->event) {
 	case RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_PHASE:
-		i3c_realtek_rts5918_handle_daa_phase(dev, args->tagt_char_info, &args->dyn_addr);
+		i3c_realtek_handle_daa_phase(dev, args->tagt_char_info, &args->dyn_addr);
 		break;
 	case RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_COMPLETE:
-		if (((const struct i3c_realtek_rts5918_config *)dev->config)->role ==
-		    RTK_I3C_TAGT) {
+		if (((const struct i3c_realtek_config *)dev->config)->role == RTK_I3C_TAGT) {
 			data->rtk_cfg.tagt_info.dyn_addr = args->dyn_addr;
 		}
 		break;
@@ -299,10 +290,11 @@ static void i3c_realtek_rts5918_hal_callback(rtk_i3c_callback_args *const args)
 	}
 }
 
-static int i3c_realtek_rts5918_configure(const struct device *dev, enum i3c_config_type type,
-					 void *bus_config)
+static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type type,
+				 void *bus_config)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	const struct i3c_realtek_config *config = dev->config;
+	struct i3c_realtek_data *data = dev->data;
 	struct i3c_config_controller *ctrl_cfg;
 	struct i3c_config_target *target_cfg;
 	int ret = 0;
@@ -324,12 +316,11 @@ static int i3c_realtek_rts5918_configure(const struct device *dev, enum i3c_conf
 
 		data->rtk_cfg.common_cfg.role = RTK_I3C_CTRL_PRIM;
 		data->rtk_cfg.bitrate_cfg.i3c_pp_baud_hz =
-			ctrl_cfg->scl.i3c ? ctrl_cfg->scl.i3c : I3C_REALTEK_RTS5918_TYP_I3C_PP_RATE;
-		data->rtk_cfg.bitrate_cfg.i3c_od_baud_hz = RTK_I3C_I3C_OD_BAUD_HZ;
+			ctrl_cfg->scl.i3c ? ctrl_cfg->scl.i3c : RTK_I3C_I3C_PP_BAUD_HZ;
+		data->rtk_cfg.bitrate_cfg.i3c_od_baud_hz = config->i3c_od_scl_hz;
 		data->rtk_cfg.bitrate_cfg.i2c_baud_hz =
-			ctrl_cfg->scl.i2c ? ctrl_cfg->scl.i2c : I3C_REALTEK_RTS5918_TYP_I2C_RATE;
-		ret = i3c_realtek_rts5918_err_to_errno(
-			rtk_i3c_ctrl_init(&data->rtk_ctx, &data->rtk_cfg));
+			ctrl_cfg->scl.i2c ? ctrl_cfg->scl.i2c : RTK_I3C_I2C_BAUD_HZ;
+		ret = i3c_realtek_err_to_errno(rtk_i3c_ctrl_init(&data->rtk_ctx, &data->rtk_cfg));
 		break;
 	case I3C_CONFIG_TARGET:
 		target_cfg = bus_config;
@@ -347,8 +338,7 @@ static int i3c_realtek_rts5918_configure(const struct device *dev, enum i3c_conf
 		data->rtk_cfg.tagt_info.resp_info.max_read_len = target_cfg->max_read_len;
 		data->rtk_cfg.tagt_info.resp_info.max_write_len = target_cfg->max_write_len;
 		data->rtk_cfg.tagt_info.resp_info.hdr_mode = target_cfg->supported_hdr;
-		ret = i3c_realtek_rts5918_err_to_errno(
-			rtk_i3c_tagt_init(&data->rtk_ctx, &data->rtk_cfg));
+		ret = i3c_realtek_err_to_errno(rtk_i3c_tagt_init(&data->rtk_ctx, &data->rtk_cfg));
 		break;
 	default:
 		ret = -ENOTSUP;
@@ -360,10 +350,10 @@ static int i3c_realtek_rts5918_configure(const struct device *dev, enum i3c_conf
 	return ret;
 }
 
-static int i3c_realtek_rts5918_config_get(const struct device *dev, enum i3c_config_type type,
-					  void *bus_config)
+static int i3c_realtek_config_get(const struct device *dev, enum i3c_config_type type,
+				  void *bus_config)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
 	if (bus_config == NULL) {
 		return -EINVAL;
@@ -391,28 +381,28 @@ static int i3c_realtek_rts5918_config_get(const struct device *dev, enum i3c_con
 	}
 }
 
-static int i3c_realtek_rts5918_do_daa(const struct device *dev)
+static int i3c_realtek_do_daa(const struct device *dev)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	int ret;
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
-	ret = i3c_realtek_rts5918_err_to_errno(rtk_i3c_do_daa(&data->rtk_ctx));
+	ret = i3c_realtek_err_to_errno(rtk_i3c_do_daa(&data->rtk_ctx));
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret;
 }
 
-static int i3c_realtek_rts5918_do_ccc(const struct device *dev, struct i3c_ccc_payload *payload)
+static int i3c_realtek_do_ccc(const struct device *dev, struct i3c_ccc_payload *payload)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_ccc ccc = {0};
 	rtk_i3c_msg ccc_msg = {0};
-	rtk_i3c_tagt tagts[I3C_REALTEK_RTS5918_MAX_DEVS];
-	rtk_i3c_msg msgs[I3C_REALTEK_RTS5918_MAX_DEVS];
+	rtk_i3c_tagt tagts[I3C_REALTEK_MAX_DEVS];
+	rtk_i3c_msg msgs[I3C_REALTEK_MAX_DEVS];
 	int ret;
 
-	if (payload == NULL || payload->targets.num_targets > I3C_REALTEK_RTS5918_MAX_DEVS) {
+	if (payload == NULL || payload->targets.num_targets > I3C_REALTEK_MAX_DEVS) {
 		return -EINVAL;
 	}
 
@@ -439,7 +429,7 @@ static int i3c_realtek_rts5918_do_ccc(const struct device *dev, struct i3c_ccc_p
 	}
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
-	ret = i3c_realtek_rts5918_err_to_errno(
+	ret = i3c_realtek_err_to_errno(
 		rtk_i3c_do_ccc(&data->rtk_ctx, &ccc, RTK_I3C_SDR_MODE, false));
 	k_mutex_unlock(&data->bus_lock);
 
@@ -451,10 +441,10 @@ static int i3c_realtek_rts5918_do_ccc(const struct device *dev, struct i3c_ccc_p
 	return ret;
 }
 
-static int i3c_realtek_rts5918_i3c_xfers(const struct device *dev, struct i3c_device_desc *target,
-					 struct i3c_msg *msgs, uint8_t num_msgs)
+static int i3c_realtek_i3c_xfers(const struct device *dev, struct i3c_device_desc *target,
+				 struct i3c_msg *msgs, uint8_t num_msgs)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	int ret = 0;
 
 	if (target == NULL || msgs == NULL) {
@@ -490,7 +480,7 @@ static int i3c_realtek_rts5918_i3c_xfers(const struct device *dev, struct i3c_de
 			mode = RTK_I3C_HDR_DDR;
 		}
 
-		ret = i3c_realtek_rts5918_err_to_errno(
+		ret = i3c_realtek_err_to_errno(
 			rtk_i3c_ctrl_xfer(&data->rtk_ctx, &tagt, mode, restart));
 		msgs[i].num_xfer = msg.count;
 		if (ret != 0) {
@@ -503,17 +493,17 @@ static int i3c_realtek_rts5918_i3c_xfers(const struct device *dev, struct i3c_de
 	return ret;
 }
 
-static struct i3c_device_desc *i3c_realtek_rts5918_device_find(const struct device *dev,
-							       const struct i3c_device_id *id)
+static struct i3c_device_desc *i3c_realtek_device_find(const struct device *dev,
+						       const struct i3c_device_id *id)
 {
-	const struct i3c_realtek_rts5918_config *config = dev->config;
+	const struct i3c_realtek_config *config = dev->config;
 
 	return i3c_dev_list_find(&config->common.dev_list, id);
 }
 
-static int i3c_realtek_rts5918_ibi_raise(const struct device *dev, struct i3c_ibi *request)
+static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *request)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_msg msg = {0};
 	rtk_i3c_msg *msg_ptr = NULL;
 	rtk_i3c_ibi_type ibi_type = RTK_I3C_IBI_INTR;
@@ -543,17 +533,15 @@ static int i3c_realtek_rts5918_ibi_raise(const struct device *dev, struct i3c_ib
 	}
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
-	ret = i3c_realtek_rts5918_err_to_errno(
-		rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr));
+	ret = i3c_realtek_err_to_errno(rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr));
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret;
 }
 
-static int i3c_realtek_rts5918_target_register(const struct device *dev,
-					       struct i3c_target_config *cfg)
+static int i3c_realtek_target_register(const struct device *dev, struct i3c_target_config *cfg)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
 	if (cfg == NULL) {
 		return -EINVAL;
@@ -563,10 +551,9 @@ static int i3c_realtek_rts5918_target_register(const struct device *dev,
 	return 0;
 }
 
-static int i3c_realtek_rts5918_target_unregister(const struct device *dev,
-						 struct i3c_target_config *cfg)
+static int i3c_realtek_target_unregister(const struct device *dev, struct i3c_target_config *cfg)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 
 	if (data->target_config != cfg) {
 		return -EINVAL;
@@ -576,9 +563,9 @@ static int i3c_realtek_rts5918_target_unregister(const struct device *dev,
 	return 0;
 }
 
-static int i3c_realtek_rts5918_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len)
+static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len)
 {
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_msg msg = {
 		.data = buf,
 		.len = len,
@@ -592,28 +579,29 @@ static int i3c_realtek_rts5918_target_tx_write(const struct device *dev, uint8_t
 	}
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
-	ret = i3c_realtek_rts5918_err_to_errno(rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg));
+	ret = i3c_realtek_err_to_errno(rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg));
 	k_mutex_unlock(&data->bus_lock);
 
 	return ret == 0 ? (int)msg.count : ret;
 }
 
-static int i3c_realtek_rts5918_init(const struct device *dev)
+static int i3c_realtek_init(const struct device *dev)
 {
-	const struct i3c_realtek_rts5918_config *config = dev->config;
-	struct i3c_realtek_rts5918_data *data = dev->data;
+	const struct i3c_realtek_config *config = dev->config;
+	struct i3c_realtek_data *data = dev->data;
 	int ret;
 
 	k_mutex_init(&data->bus_lock);
 	k_sem_init(&data->ccc_end, 0, 1);
 	k_sem_init(&data->xfer_end, 0, 1);
 
-	i3c_realtek_rts5918_devices[config->instance_id] = dev;
+	i3c_realtek_devices[config->instance_id] = dev;
 
 	rtk_i3c_get_config(NULL, &data->rtk_cfg);
 	data->rtk_cfg.common_cfg.instance_id = config->instance_id;
+	data->rtk_cfg.common_cfg.i3c_freq_hz = config->i3c_freq_hz;
 	data->rtk_cfg.common_cfg.role = config->role;
-	data->rtk_cfg.common_cfg.callback = i3c_realtek_rts5918_hal_callback;
+	data->rtk_cfg.common_cfg.callback = i3c_realtek_hal_callback;
 	data->rtk_cfg.common_cfg.ctx = dev;
 	data->rtk_cfg.tagt_table = data->tagt_table;
 	data->rtk_cfg.addr_slot = data->addr_slots;
@@ -641,17 +629,17 @@ static int i3c_realtek_rts5918_init(const struct device *dev)
 	config->irq_config_func(dev);
 
 	if (config->role == RTK_I3C_CTRL_PRIM) {
-		ret = i3c_realtek_rts5918_address_slots_init(dev);
+		ret = i3c_realtek_address_slots_init(dev);
 		if (ret != 0) {
 			return ret;
 		}
 
 		data->common.ctrl_config.scl.i3c = data->common.ctrl_config.scl.i3c
 							   ? data->common.ctrl_config.scl.i3c
-							   : I3C_REALTEK_RTS5918_TYP_I3C_PP_RATE;
+							   : RTK_I3C_I3C_PP_BAUD_HZ;
 		data->common.ctrl_config.scl.i2c = data->common.ctrl_config.scl.i2c
 							   ? data->common.ctrl_config.scl.i2c
-							   : I3C_REALTEK_RTS5918_TYP_I2C_RATE;
+							   : RTK_I3C_I2C_BAUD_HZ;
 
 		ret = i3c_configure(dev, I3C_CONFIG_CONTROLLER, &data->common.ctrl_config);
 		if (ret != 0) {
@@ -677,50 +665,49 @@ static int i3c_realtek_rts5918_init(const struct device *dev)
 	return 0;
 }
 
-static const struct i3c_driver_api i3c_realtek_rts5918_api = {
-	.configure = i3c_realtek_rts5918_configure,
-	.config_get = i3c_realtek_rts5918_config_get,
-	.attach_i3c_device = i3c_realtek_rts5918_attach_i3c_device,
-	.reattach_i3c_device = i3c_realtek_rts5918_reattach_i3c_device,
-	.detach_i3c_device = i3c_realtek_rts5918_detach_i3c_device,
-	.do_daa = i3c_realtek_rts5918_do_daa,
-	.do_ccc = i3c_realtek_rts5918_do_ccc,
-	.i3c_xfers = i3c_realtek_rts5918_i3c_xfers,
-	.i3c_device_find = i3c_realtek_rts5918_device_find,
-	.ibi_raise = i3c_realtek_rts5918_ibi_raise,
-	.target_register = i3c_realtek_rts5918_target_register,
-	.target_unregister = i3c_realtek_rts5918_target_unregister,
-	.target_tx_write = i3c_realtek_rts5918_target_tx_write,
+static const struct i3c_driver_api i3c_realtek_api = {
+	.configure = i3c_realtek_configure,
+	.config_get = i3c_realtek_config_get,
+	.attach_i3c_device = i3c_realtek_attach_i3c_device,
+	.reattach_i3c_device = i3c_realtek_reattach_i3c_device,
+	.detach_i3c_device = i3c_realtek_detach_i3c_device,
+	.do_daa = i3c_realtek_do_daa,
+	.do_ccc = i3c_realtek_do_ccc,
+	.i3c_xfers = i3c_realtek_i3c_xfers,
+	.i3c_device_find = i3c_realtek_device_find,
+	.ibi_raise = i3c_realtek_ibi_raise,
+	.target_register = i3c_realtek_target_register,
+	.target_unregister = i3c_realtek_target_unregister,
+	.target_tx_write = i3c_realtek_target_tx_write,
 };
 
-#define REALTEK_RTS5918_I3C_ROLE(n)                                                                \
+#define I3C_REALTEK_ROLE(n)                                                                        \
 	COND_CODE_1(DT_INST_PROP(n, target_mode), (RTK_I3C_TAGT), (RTK_I3C_CTRL_PRIM))
 
-static int i3c_realtek_rts5918_target_device_init(const struct device *dev)
+static int i3c_realtek_target_device_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 	return 0;
 }
 
-#define REALTEK_RTS5918_I3C_TARGET_DEVICE_DEFINE(node_id)                                          \
-	I3C_DEVICE_DT_DEFINE(node_id, i3c_realtek_rts5918_target_device_init, NULL, NULL, NULL,    \
+#define I3C_REALTEK_TARGET_DEVICE_DEFINE(node_id)                                                  \
+	I3C_DEVICE_DT_DEFINE(node_id, i3c_realtek_target_device_init, NULL, NULL, NULL,            \
 			     POST_KERNEL, CONFIG_I3C_CONTROLLER_INIT_PRIORITY, NULL);
 
-#define REALTEK_RTS5918_I3C_INIT(n)                                                                \
-	static void i3c_realtek_rts5918_irq_config_##n(const struct device *dev);                  \
+#define I3C_REALTEK_INIT(n)                                                                        \
+	static void i3c_realtek_irq_config_##n(const struct device *dev);                          \
 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
-	DT_INST_FOREACH_CHILD_STATUS_OKAY(n, REALTEK_RTS5918_I3C_TARGET_DEVICE_DEFINE)             \
-	static struct i3c_device_desc i3c_realtek_rts5918_i3c_dev_list_##n[] =                     \
+	DT_INST_FOREACH_CHILD_STATUS_OKAY(n, I3C_REALTEK_TARGET_DEVICE_DEFINE)                     \
+	static struct i3c_device_desc i3c_realtek_i3c_dev_list_##n[] =                             \
 		I3C_DEVICE_ARRAY_DT_INST(n);                                                       \
-	static struct i3c_i2c_device_desc i3c_realtek_rts5918_i2c_dev_list_##n[] =                 \
+	static struct i3c_i2c_device_desc i3c_realtek_i2c_dev_list_##n[] =                         \
 		I3C_I2C_DEVICE_ARRAY_DT_INST(n);                                                   \
-	static struct i3c_realtek_rts5918_data i3c_realtek_rts5918_data_##n = {                    \
+	static struct i3c_realtek_data i3c_realtek_data_##n = {                                    \
 		.common.ctrl_config.scl.i3c =                                                      \
-			DT_INST_PROP_OR(n, i3c_scl_hz, I3C_REALTEK_RTS5918_TYP_I3C_PP_RATE),       \
-		.common.ctrl_config.scl.i2c =                                                      \
-			DT_INST_PROP_OR(n, i2c_scl_hz, I3C_REALTEK_RTS5918_TYP_I2C_RATE),          \
+			DT_INST_PROP_OR(n, i3c_scl_hz, RTK_I3C_I3C_PP_BAUD_HZ),                    \
+		.common.ctrl_config.scl.i2c = DT_INST_PROP_OR(n, i2c_scl_hz, RTK_I3C_I2C_BAUD_HZ), \
 	};                                                                                         \
-	static const struct i3c_realtek_rts5918_config i3c_realtek_rts5918_config_##n = {          \
+	static const struct i3c_realtek_config i3c_realtek_config_##n = {                          \
 		.base = DT_INST_REG_ADDR(n),                                                       \
 		.pincfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                       \
 		.clock_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),                                \
@@ -730,31 +717,31 @@ static int i3c_realtek_rts5918_target_device_init(const struct device *dev)
 				.clk_idx = DT_INST_PHA(n, clocks, clk_idx),                        \
 			},                                                                         \
 		.instance_id = n,                                                                  \
-		.role = REALTEK_RTS5918_I3C_ROLE(n),                                               \
-		.static_addr = DT_INST_PROP_OR(n, static_addr, 0x10),                              \
+		.i3c_freq_hz = DT_INST_PROP_OR(n, clock_frequency, RTK_I3C_FREQ_HZ),               \
+		.i3c_od_scl_hz = DT_INST_PROP_OR(n, i3c_od_scl_hz, RTK_I3C_I3C_OD_BAUD_HZ),        \
+		.role = I3C_REALTEK_ROLE(n),                                                       \
+		.static_addr = DT_INST_PROP_OR(n, static_addr, 0),                                 \
 		.dynamic_addr = DT_INST_PROP_OR(n, primary_controller_da, 0),                      \
-		.pid = ((uint64_t)DT_INST_PROP_OR(                                                 \
-				n, pid_msb, (uint32_t)(I3C_REALTEK_RTS5918_DEFAULT_PID >> 32))     \
-			<< 32) |                                                                   \
-		       DT_INST_PROP_OR(n, pid_lsb, (uint32_t)I3C_REALTEK_RTS5918_DEFAULT_PID),     \
-		.bcr = DT_INST_PROP_OR(n, bcr, I3C_REALTEK_RTS5918_DEFAULT_BCR),                   \
-		.dcr = DT_INST_PROP_OR(n, dcr, I3C_REALTEK_RTS5918_DEFAULT_DCR),                   \
+		.pid = ((uint64_t)DT_INST_PROP_OR(n, pid_msb, 0) << 32) |                          \
+		       DT_INST_PROP_OR(n, pid_lsb, 0),                                             \
+		.bcr = DT_INST_PROP_OR(n, bcr, 0),                                                 \
+		.dcr = DT_INST_PROP_OR(n, dcr, 0),                                                 \
 		.max_read_len = DT_INST_PROP_OR(n, max_read_len, RTK_I3C_FIFO_DEPTH),              \
 		.max_write_len = DT_INST_PROP_OR(n, max_write_len, RTK_I3C_FIFO_DEPTH),            \
-		.irq_config_func = i3c_realtek_rts5918_irq_config_##n,                             \
-		.common.dev_list.i3c = i3c_realtek_rts5918_i3c_dev_list_##n,                       \
-		.common.dev_list.num_i3c = ARRAY_SIZE(i3c_realtek_rts5918_i3c_dev_list_##n),       \
-		.common.dev_list.i2c = i3c_realtek_rts5918_i2c_dev_list_##n,                       \
-		.common.dev_list.num_i2c = ARRAY_SIZE(i3c_realtek_rts5918_i2c_dev_list_##n),       \
+		.irq_config_func = i3c_realtek_irq_config_##n,                                     \
+		.common.dev_list.i3c = i3c_realtek_i3c_dev_list_##n,                               \
+		.common.dev_list.num_i3c = ARRAY_SIZE(i3c_realtek_i3c_dev_list_##n),               \
+		.common.dev_list.i2c = i3c_realtek_i2c_dev_list_##n,                               \
+		.common.dev_list.num_i2c = ARRAY_SIZE(i3c_realtek_i2c_dev_list_##n),               \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(n, i3c_realtek_rts5918_init, NULL, &i3c_realtek_rts5918_data_##n,    \
-			      &i3c_realtek_rts5918_config_##n, POST_KERNEL,                        \
-			      CONFIG_I3C_CONTROLLER_INIT_PRIORITY, &i3c_realtek_rts5918_api);      \
-	static void i3c_realtek_rts5918_irq_config_##n(const struct device *dev)                   \
+	DEVICE_DT_INST_DEFINE(n, i3c_realtek_init, NULL, &i3c_realtek_data_##n,                    \
+			      &i3c_realtek_config_##n, POST_KERNEL,                                \
+			      CONFIG_I3C_CONTROLLER_INIT_PRIORITY, &i3c_realtek_api);              \
+	static void i3c_realtek_irq_config_##n(const struct device *dev)                           \
 	{                                                                                          \
-		IRQ_CONNECT(DT_INST_IRQN(n), DT_INST_IRQ(n, priority), i3c_realtek_rts5918_isr,    \
+		IRQ_CONNECT(DT_INST_IRQN(n), DT_INST_IRQ(n, priority), i3c_realtek_isr,            \
 			    DEVICE_DT_INST_GET(n), 0);                                             \
 		irq_enable(DT_INST_IRQN(n));                                                       \
 	}
 
-DT_INST_FOREACH_STATUS_OKAY(REALTEK_RTS5918_I3C_INIT)
+DT_INST_FOREACH_STATUS_OKAY(I3C_REALTEK_INIT)

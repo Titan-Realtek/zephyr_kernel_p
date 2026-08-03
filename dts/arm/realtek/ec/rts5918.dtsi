@@ -476,6 +476,7 @@
 			interrupt-parent = <&nvic>;
 			interrupts = <108 2>;
 			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C1_PWR>;
+			clock-frequency = <125000000>;
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
@@ -487,6 +488,7 @@
 			interrupt-parent = <&nvic>;
 			interrupts = <109 2>;
 			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C2_PWR>;
+			clock-frequency = <125000000>;
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
@@ -498,6 +500,7 @@
 			interrupt-parent = <&nvic>;
 			interrupts = <110 2>;
 			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C3_PWR>;
+			clock-frequency = <125000000>;
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;
@@ -509,6 +512,7 @@
 			interrupt-parent = <&nvic>;
 			interrupts = <111 2>;
 			clocks = <&sccon RTS5918_CLK_I3C RTS5918_I3C4_PWR>;
+			clock-frequency = <125000000>;
 			status = "disabled";
 			#address-cells = <3>;
 			#size-cells = <0>;

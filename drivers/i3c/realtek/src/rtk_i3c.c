@@ -15,7 +15,7 @@
 #include <string.h>
 #include <limits.h>
 
-#ifdef CONFIG_RTS5918_I3C
+#ifdef CONFIG_RTK_I3C
 #define MAX_BYFM_NDF 64
 
 void rtk_i3c_isr(rtk_i3c_ctx *);
@@ -130,7 +130,7 @@ static int rtk_i3c_read_fifo_cpu(const rtk_i3c_ctx *ctx, rtk_i3c_msg *msg, size_
 static inline int rtk_i3c_write_fifo(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 {
 	LOG_DBG("expected %zu bytes\n", msg->len - msg->count);
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(msg->flags)) {
 		return rtk_i3c_write_fifo_dma(ctx, msg);
 	} else
@@ -175,7 +175,7 @@ static inline int rtk_i3c_read_fifo(rtk_i3c_ctx *ctx, rtk_i3c_rx_buffer *buffer,
 			return RTK_I3C_READ_BUFFER_FULL;
 		}
 		buffer->buffer_requested = false;
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 		if (I3C_MSG_IS_DMA(buffer->msg.flags)) {
 			/* in dma mode, the read_len is determined by the buffer length */
 			read_len = buffer->msg.len - buffer->msg.count;
@@ -183,7 +183,7 @@ static inline int rtk_i3c_read_fifo(rtk_i3c_ctx *ctx, rtk_i3c_rx_buffer *buffer,
 #endif
 	}
 	LOG_DBG("expected %zu bytes\n", read_len);
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(buffer->msg.flags)) {
 		ret = rtk_i3c_read_fifo_dma(ctx, &buffer->msg, read_len);
 	} else
@@ -462,7 +462,7 @@ void rtk_i3c_dump_info(const rtk_i3c_ctx *ctx)
 								  : "Controller"));
 
 	/* Baudrate (only for controller) */
-#ifdef CONFIG_RTS5918_I3C_CTRL
+#ifdef CONFIG_RTK_I3C_CTRL
 	LOG_INF("I3C Baud   : %" PRIu32 "Hz (PP) / %" PRIu32 "Hz (OD)\n",
 		cfg->bitrate_cfg.i3c_pp_baud_hz, cfg->bitrate_cfg.i3c_od_baud_hz);
 	LOG_INF("I2C Baud   : %" PRIu32 "Hz\n", cfg->bitrate_cfg.i2c_baud_hz);
@@ -470,22 +470,22 @@ void rtk_i3c_dump_info(const rtk_i3c_ctx *ctx)
 
 	/* Features */
 	LOG_INF("Features   : "
-#ifdef CONFIG_RTS5918_I3C_CTRL
+#ifdef CONFIG_RTK_I3C_CTRL
 		"CTRL=y, "
 #else
 		"CTRL=n, "
 #endif
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 		"TAGT=y, "
 #else
 		"TAGT=n, "
 #endif
-#ifdef CONFIG_RTS5918_I3C_IBI
+#ifdef CONFIG_RTK_I3C_IBI
 		"IBI=y, "
 #else
 		"IBI=n, "
 #endif
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 		"DMA=y\n"
 #else
 		"DMA=n\n"
@@ -498,7 +498,7 @@ void rtk_i3c_dump_info(const rtk_i3c_ctx *ctx)
 	LOG_INF("=====================================\n");
 }
 
-#ifdef CONFIG_RTS5918_I3C_CTRL
+#ifdef CONFIG_RTK_I3C_CTRL
 
 static inline int rtk_i3c_enter_hdr(rtk_i3c_ctx *ctx, rtk_i3c_mode i3c_mode)
 {
@@ -657,7 +657,7 @@ void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 		cfg->common_cfg.callback = NULL;
 		cfg->common_cfg.ctx = NULL;
 
-#ifdef CONFIG_RTS5918_I3C_CTRL
+#ifdef CONFIG_RTK_I3C_CTRL
 #if defined(RTK_I3C_I2C_BAUD_HZ) && (RTK_I3C_I2C_BAUD_HZ != 0)
 		cfg->bitrate_cfg.i2c_baud_hz = RTK_I3C_I2C_BAUD_HZ;
 #else
@@ -675,7 +675,7 @@ void rtk_i3c_get_config(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 #endif
 #endif
 
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 		cfg->tagt_info.dyn_addr = 0x10;
 		cfg->tagt_info.stc_addr = 0x10;
 		cfg->tagt_info.char_info.pid = 0x04ba00001000;
@@ -995,7 +995,7 @@ exit_nack:
 	return ret;
 }
 
-#ifdef CONFIG_RTS5918_I3C_IBI
+#ifdef CONFIG_RTK_I3C_IBI
 
 /**
  * Read IBI data. Only for controller
@@ -1020,10 +1020,10 @@ int rtk_i3c_ibi_read(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 	return 0;
 }
 
-#endif /* CONFIG_RTS5918_I3C_IBI */
-#endif /* CONFIG_RTS5918_I3C_CTRL */
+#endif /* CONFIG_RTK_I3C_IBI */
+#endif /* CONFIG_RTK_I3C_CTRL */
 
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 
 int rtk_i3c_tagt_init(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 {
@@ -1098,7 +1098,7 @@ int rtk_i3c_tagt_deinit(rtk_i3c_ctx *ctx)
 	return 0;
 }
 
-#ifdef CONFIG_RTS5918_I3C_IBI
+#ifdef CONFIG_RTK_I3C_IBI
 
 /**
  * Write IBI data. Only for target.
@@ -1175,8 +1175,8 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 	return 0;
 }
 
-#endif /* CONFIG_RTS5918_I3C_IBI */
-#endif /* CONFIG_RTS5918_I3C_TAGT */
+#endif /* CONFIG_RTK_I3C_IBI */
+#endif /* CONFIG_RTK_I3C_TAGT */
 
 /**
  * @brief The done isr is generated
@@ -1201,7 +1201,7 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 		return;
 	}
 
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 	if (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) {
 		uint32_t trans_info = rtk_i3c_core_get_trinf(ctx->core);
 		bool is_ccc = BIT_FIELD_GET(trans_info, 15, 15);
@@ -1209,7 +1209,7 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 
 		ctx->ccc_id = is_ccc ? ccc_id : I3C_CCC_INVALID_ID;
 	}
-#endif /* CONFIG_RTS5918_I3C_TAGT */
+#endif /* CONFIG_RTK_I3C_TAGT */
 
 	args.ccc_id = ctx->ccc_id;
 	ctx->ccc_id = I3C_CCC_INVALID_ID;
@@ -1217,17 +1217,17 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 	if (I3C_CCC_IS_DA(args.ccc_id)) {
 		/* Address assignment CCC */
 		args.event = RTK_I3C_EVENT_ADDRESS_ASSIGNMENT_COMPLETE;
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 		if (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) {
 			uint32_t addr_info = rtk_i3c_core_get_dsa(ctx->core);
 			args.dyn_addr = BIT_FIELD_GET(addr_info, 0, 6);
 			ctx->cfg->tagt_info.dyn_addr = args.dyn_addr;
 		}
-#endif /* CONFIG_RTS5918_I3C_TAGT */
+#endif /* CONFIG_RTK_I3C_TAGT */
 	} else if (!I3C_CCC_IS_INVALID(args.ccc_id)) {
 		/* Other CCC */
 		args.event = RTK_I3C_EVENT_COMMAND_COMPLETE;
-#ifdef CONFIG_RTS5918_I3C_TAGT
+#ifdef CONFIG_RTK_I3C_TAGT
 		if (I3C_CCC_IS_EC(args.ccc_id)) {
 			rtk_i3c_core_get_ibi_cap(ctx->core, &ctx->cfg->common_cfg.ibi);
 		}
@@ -1237,7 +1237,7 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 		args.count = ctx->ibi_buffer.msg.count;
 		args.len = ctx->ibi_buffer.msg.len;
 		ctx->ibi_buffer = (rtk_i3c_rx_buffer){0};
-#endif /* CONFIG_RTS5918_I3C_TAGT */
+#endif /* CONFIG_RTK_I3C_TAGT */
 	} else if (I3C_STATE_IS_WRITE(ctx->state) && !I3C_MSG_IS_DMA(ctx->tx_buffer.msg.flags) &&
 		   ctx->tx_buffer.msg.count == ctx->tx_buffer.msg.len) {
 		/* Write transfer done. Only triggerd when count==len to avoid hdr-exit pattern
@@ -1273,7 +1273,7 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	if ((read_len = rtk_i3c_core_get_rx_fifo_len(ctx->core)) == 0) {
 		return;
 	}
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(ctx->rx_buffer.msg.flags)) {
 		read_len = ctx->rx_buffer.msg.len;
 	}
@@ -1290,7 +1290,7 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 		goto exit;
 	}
 
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(ctx->rx_buffer.msg.flags)) {
 		return;
 	}
@@ -1338,7 +1338,7 @@ static __always_inline void rtk_i3c_rxnak_isr(rtk_i3c_ctx *ctx)
 	}
 }
 
-#ifdef CONFIG_RTS5918_I3C_IBI
+#ifdef CONFIG_RTK_I3C_IBI
 /**
  * @brief RXIBI ISR - Regular IBI interrupt handler
  *
@@ -1372,7 +1372,7 @@ static __always_inline void rtk_i3c_rxibi_isr(rtk_i3c_ctx *ctx)
 
 	if (bcr & I3C_BCR_IBI_PAYLOAD) {
 		/* bcr[2] = 1, receive ibi payload */
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 		/* mdb is received by i3c not by dma */
 		if (I3C_MSG_IS_DMA(ctx->ibi_buffer.msg.flags)) {
 			read_len = ctx->ibi_buffer.msg.len > 0 ? ctx->ibi_buffer.msg.len - 1 : 0;
@@ -1389,7 +1389,7 @@ static __always_inline void rtk_i3c_rxibi_isr(rtk_i3c_ctx *ctx)
 		*ctx->ibi_buffer.msg.data = mdb;
 	}
 
-#ifdef CONFIG_RTS5918_I3C_DMA
+#ifdef CONFIG_RTK_I3C_DMA
 	if (I3C_MSG_IS_DMA(ctx->ibi_buffer.msg.flags)) {
 		return;
 	}
@@ -1475,7 +1475,7 @@ static __always_inline void rtk_i3c_daf_isr(rtk_i3c_ctx *ctx)
 		ctx->cfg->common_cfg.callback(&args);
 	}
 }
-#endif /* CONFIG_RTS5918_I3C_IBI */
+#endif /* CONFIG_RTK_I3C_IBI */
 
 /**
  * @brief I3C interrupt service routine. This function dispatch
@@ -1489,7 +1489,7 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 
 	LOG_DBG("Instance %d, ISR=0x%08" PRIx32 "\n", ctx->cfg->common_cfg.instance_id, isr_bits);
 
-#ifdef CONFIG_RTS5918_I3C_IBI
+#ifdef CONFIG_RTK_I3C_IBI
 	/* IBI type interrupts (independent handlers) */
 	if (isr_bits & I3C_ISR_RXIBI_MASK) {
 		rtk_i3c_rxibi_isr(ctx);
@@ -1503,7 +1503,7 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 	if (isr_bits & I3C_ISR_DAF_MASK) {
 		rtk_i3c_daf_isr(ctx);
 	}
-#endif /* CONFIG_RTS5918_I3C_IBI */
+#endif /* CONFIG_RTK_I3C_IBI */
 
 	if (isr_bits & I3C_ISR_RXNE_MASK) {
 		rtk_i3c_rxne_isr(ctx);
@@ -1516,4 +1516,4 @@ void rtk_i3c_isr(rtk_i3c_ctx *ctx)
 	}
 	rtk_i3c_core_clear_isr(ctx->core, isr_bits);
 }
-#endif /* CONFIG_RTS5918_I3C */
+#endif /* CONFIG_RTK_I3C */
