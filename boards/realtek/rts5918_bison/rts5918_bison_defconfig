@@ -1,0 +1,72 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+# Image tool — Phase 6.1: enabled to mirror sister project
+# (5918/Wistron_Lenovo_ecfw/boards/lenovo/lbc2_arl_7088/lbc2_arl_7088_defconfig).
+# Post-build runs soc/realtek/ec/common/rts5918_imgtool/image_gen_w_sign.py
+# which prepends the bootROM-readable RTS5918 image header (RLTK magic +
+# load address + SPI mode/freq/read-cmd descriptors + ECDSA signature
+# over SHA2-384) to zephyr.bin and writes zephyr.rts5918.bin. Requires the
+# `ecdsa` and `pyhsslms` Python modules in the build venv.
+CONFIG_REALTEK_RTS5918_IMG_HEADER=y
+CONFIG_REALTEK_RTS_IMG_HEADER_SPI_FREQ_MHZ_DIV8=y
+CONFIG_REALTEK_RTS_IMG_HEADER_SPI_READ_CMD_NORMAL=y
+
+# Stack
+CONFIG_MAIN_STACK_SIZE=8192
+CONFIG_IDLE_STACK_SIZE=8192
+CONFIG_ISR_STACK_SIZE=4096
+
+# Serial
+CONFIG_SERIAL=y
+
+# Console (kept off by ecfw prj.conf, but enable here so HAS_* deps resolve)
+CONFIG_CONSOLE=y
+CONFIG_UART_CONSOLE=y
+
+# Clock control
+CONFIG_CLOCK_CONTROL=y
+
+# GPIO
+CONFIG_GPIO=y
+CONFIG_GPIO_GET_DIRECTION=y
+CONFIG_GPIO_GET_CONFIG=y
+CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT=y
+
+# Pinctrl
+CONFIG_PINCTRL=y
+
+# Subsystems referenced by Jupiter/smc/Hw*.c so the middle/<x>_hub
+# layer compiles + links. Real driver instances depend on the DTS
+# nodes in rts5918_bison.overlay.
+CONFIG_PWM=y
+CONFIG_ADC=y
+CONFIG_I2C=y
+CONFIG_WATCHDOG=y
+CONFIG_FLASH=y
+CONFIG_INPUT=y
+CONFIG_SENSOR=y
+CONFIG_PS2=y
+CONFIG_ESPI=y
+CONFIG_ESPI_PERIPHERAL_CUSTOM_OPCODE=y
+CONFIG_ESPI_PERIPHERAL_EC_HOST_CMD=y
+CONFIG_ESPI_PERIPHERAL_HOST_IO=y
+CONFIG_ESPI_PERIPHERAL_ACPI_SHM_REGION=y
+# Phase 10.1: enable async OOB rx so middle/espi/mdl_espi_hub.c
+# compiles `espihub_add_oob_rx_handler`. The function is declared
+# unconditionally in include/middle/mdl_espi_hub.h:296 and called
+# unconditionally from app/hostif/app_thread_init.c:104, but its
+# *definition* in mdl_espi_hub.c:127 is gated by this Kconfig.
+# Mirrors 5918/Wistron_Lenovo_ecfw/boards/lenovo/lbc2_arl_7088/
+# lbc2_arl_7088_defconfig:104 which set the same flag.
+CONFIG_ESPI_OOB_CHANNEL_RX_ASYNC=y
+CONFIG_RTC=y
+CONFIG_BBRAM=y
+
+# Phase 8.3d: PCAL6416A driver removed — the two GPIO expanders on i2c_4
+# are now handled by the Lenovo Nct5635 driver
+# (ecfw-zephyr/Jupiter/peripheral/Nct5635/nct5635.c) via the Phase 8.1
+# Iic.c shim. The standard Zephyr GPIO API still works for those pins
+# through the Phase 8.3c BIT(31) auto-route in mdl_gpio_hub.c.

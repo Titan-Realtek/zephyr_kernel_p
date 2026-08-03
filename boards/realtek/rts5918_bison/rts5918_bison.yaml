@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Realtek Semiconductor Corporation, SIBG-SD7
+#
+
+identifier: rts5918_bison
+name: Realtek RTS5918 Bison Board
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 192
+flash: 403
+supported:
+  - gpio
+  - pinmux
+  - i2c
+  - adc
+  - pwm
+  - watchdog
+vendor: realtek
