@@ -505,8 +505,15 @@ static int gpio_rts5918_intr_config(const struct device *port, gpio_pin_t pin,
 		/* Re-enable a previously configured interrupt without touching
 		 * INTCTRL. Caller is expected to have configured the trigger
 		 * earlier via GPIO_INT_MODE_LEVEL / _EDGE.
+		 *
+		 * Also W1C any stale INTSTS in the same write — between an
+		 * earlier DISABLE_ONLY and this ENABLE_ONLY the pin level may
+		 * have transitioned and latched a pending bit, which would
+		 * otherwise fire a spurious ISR the moment INTEN goes back
+		 * high. Setting INTSTS here writes 1 to clear (W1C); INTEN is
+		 * RW so the same write asserts the enable.
 		 */
-		cfg_val |= GPIO_GCR_INTEN_Msk;
+		cfg_val |= GPIO_GCR_INTSTS_Msk | GPIO_GCR_INTEN_Msk;
 		*gcr = cfg_val;
 		irq_enable(pin_index);
 		return 0;
