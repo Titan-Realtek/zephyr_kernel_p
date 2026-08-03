@@ -132,7 +132,6 @@ static int adc_rts5918_enable(const struct device *dev)
 {
 	const struct adc_rts5918_config *const cfg = dev->config;
 	volatile struct adc_regs *regs = cfg->regs;
-	int64_t st = k_uptime_get();
 
 	LOG_DBG("adc enable");
 	/* ADC Enable */

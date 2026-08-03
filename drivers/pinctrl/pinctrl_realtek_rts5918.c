@@ -33,7 +33,7 @@ static volatile uint32_t *iopad_base = (volatile uint32_t *)(0x40091000);
 int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintptr_t reg)
 {
 	ARG_UNUSED(reg);
-	uint32_t pin, pinmux, func, pin_sel, bit_length = 0, bit_length_msk, bit_value_msk_shift, bit_value_shift;
+	uint32_t pin, pinmux, func, pin_sel, bit_length_msk, bit_value_msk_shift, bit_value_shift;
 	SYSTEM_Type *sys_reg = RTS5918_SCCON_REG_BASE;
 
 	for (uint8_t i = 0U; i < pin_cnt; i++) {
@@ -44,10 +44,8 @@ int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintp
 		
 		if(pin_sel){
 			if(pin & BIT_LENGTH_MSK){
-				bit_length = 2;
 				bit_length_msk = 0x3;
 			} else {
-				bit_length = 1;
 				bit_length_msk = 0x1;
 			}
 			bit_value_msk_shift = bit_length_msk << ( pin & BIT_SHIFT_MSK);

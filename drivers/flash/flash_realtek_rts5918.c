@@ -785,7 +785,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	spic_usermode(dev);
 	if (type == THREEBYTEERASE) {
 		config_command(command, SPI_NOR_CMD_EXIT_4BA, 0, 0, 0);
-		ret = spic_write(dev, command, NULL, &len);
+		(void)spic_write(dev, command, NULL, &len);
 
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
@@ -819,7 +819,7 @@ err_exit:
 	flash_write_disable(dev);
 	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
 		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
-		ret = spic_write(dev, command, NULL, &len);
+		(void)spic_write(dev, command, NULL, &len);
 
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
@@ -852,7 +852,7 @@ volatile struct reg_spic_reg *spic_reg = config->regs;
 	spic_usermode(dev);
 	if (type == THREEBYTEERASE) {
 		config_command(command, SPI_NOR_CMD_EXIT_4BA, 0, 0, 0);
-		ret = spic_write(dev, command, NULL, &len);
+		(void)spic_write(dev, command, NULL, &len);
 
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
@@ -887,7 +887,7 @@ err_exit:
 	flash_write_disable(dev);
 	if (type == THREEBYTEERASE && ((uintptr_t)spic_reg == 0x40000000)) {
 		config_command(command, SPI_NOR_CMD_4BA, 0, 0, 0);
-		ret = spic_write(dev, command, NULL, &len);
+		(void)spic_write(dev, command, NULL, &len);
 
 		ret = flash_wait_till_ready(dev);
 		if (ret != 0) {
@@ -1046,8 +1046,7 @@ static const struct qspi_cmd_set qspi_cmd_table[] = {
 static inline const struct qspi_cmd_set *
 flash_get_qspi_cmd(const struct device *dev)
 {
-	const struct flash_rts5918_dev_config *cfg = dev->config;
-
+	ARG_UNUSED(dev);
 	//if (cfg->qspi_mode >= ARRAY_SIZE(qspi_cmd_table)) {
 		return &qspi_cmd_table[0]; /* fallback 1-1-1 */
 	//}
@@ -1197,7 +1196,6 @@ static int check_boundary(off_t offset, size_t len)
 
 static int flash_rts5918_erase(const struct device *dev, off_t offset, size_t len)
 {
-	struct flash_rts5918_dev_data *data = dev->data;
 	int ret = -EINVAL;
 
 	if (len == 0) {
@@ -1265,7 +1263,6 @@ static int flash_rts5918_write(const struct device *dev, off_t offset, const voi
 
 static int flash_rts5918_read(const struct device *dev, off_t offset, void *data, size_t len)
 {
-	struct flash_rts5918_dev_data *dev_data = dev->data;
 	int ret;
 
 	if (len == 0) {
@@ -1497,7 +1494,7 @@ static int flash_set_qspi_mode(const struct device *dev)
 	}
 
 	{
-		uint8_t sr2_2;
+		uint8_t sr2_2 = 0;
 		flash_read_sr2(dev, &sr2_2);
 		if (!(sr2_2 & BIT(1))) {
 			LOG_ERR("Failed to set QE bit in SR2");
@@ -1678,12 +1675,14 @@ void flash_rts5918_saf_erase_sector_hardcode(volatile struct reg_spic_reg *spic_
 
 void flash_rts5918_saf_erase_sector_handler(const struct device *dev, const uint32_t address)
 {
-	const struct flash_rts5918_dev_config *config = dev->config;
-    volatile struct reg_spic_reg *spic_reg = config->regs;
 	//LOG_INF("erase handler");
 	//LOG_INF("reg base: %x", (uint32_t)spic_reg);
 	saf_flash_erase_sector(dev, address, FOURBYTEERASE);
 	return ;
+	/* below is dead code retained for reference; keep declarations
+	 * so the unreachable block still parses cleanly. */
+	const struct flash_rts5918_dev_config *config = dev->config;
+	volatile struct reg_spic_reg *spic_reg = config->regs;
 	uint32_t mmap_addr = 0x60000000 + address;
 	uint8_t status;
 	// const struct flash_rts5918_dev_config *config = dev->config;

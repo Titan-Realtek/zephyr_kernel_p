@@ -509,7 +509,6 @@ static int espi_emi_setup(const struct device *dev)
 {
 	const struct espi_rts5918_config *const espi_config = dev->config;
 	struct rts5918_sccon_subsys sccon;
-	volatile struct acpi_reg *const acpi_reg = espi_config->acpi_reg;
 	int rc;
 
 	if (!device_is_ready(espi_config->clk_dev)) {
@@ -723,7 +722,7 @@ static int espi_promt0_setup(const struct device *dev)
 	promt0_reg->STS = 0;
 
 	if (promt0_reg->STS & ACPI_STS_IBF) {
-		rc = promt0_reg->IB;
+		(void)promt0_reg->IB;  /* discard pending byte */
 	}
 	if (promt0_reg->STS & ACPI_STS_IBF) {
 		promt0_reg->STS |= ACPI_STS_CLR_IBF_FULL;
@@ -830,7 +829,7 @@ static int espi_promt1_setup(const struct device *dev)
 	promt1_reg->STS = 0;
 
 	if (promt1_reg->STS & ACPI_STS_IBF) {
-		rc = promt1_reg->IB;
+		(void)promt1_reg->IB;  /* discard pending byte */
 	}
 
 	if (promt1_reg->STS & ACPI_STS_IBF) {
@@ -940,7 +939,7 @@ static int espi_promt2_setup(const struct device *dev)
 	promt2_reg->STS = 0;
 
 	if (promt2_reg->STS & ACPI_STS_IBF) {
-		rc = promt2_reg->IB;
+		(void)promt2_reg->IB;  /* discard pending byte */
 	}
 
 	if (promt2_reg->STS & ACPI_STS_IBF) {
@@ -1053,7 +1052,7 @@ static int espi_promt3_setup(const struct device *dev)
 	promt3_reg->STS = 0;
 
 	if (promt3_reg->STS & ACPI_STS_IBF) {
-		rc = promt3_reg->IB;
+		(void)promt3_reg->IB;  /* discard pending byte */
 	}
 
 	if (promt3_reg->STS & ACPI_STS_IBF) {
@@ -2256,8 +2255,7 @@ static int espi_rts5918_send_vwire(const struct device *dev, enum espi_vwire_sig
 static int espi_rts5918_receive_vwire(const struct device *dev, enum espi_vwire_signal signal,
 				      uint8_t *level)
 {
-	const struct espi_rts5918_config *const espi_config = dev->config;
-	volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
+	ARG_UNUSED(dev);
 	uint8_t vw_idx, lev_msk, valid_msk;
 	uint8_t vw_data;
 uint8_t active_h;
@@ -2510,7 +2508,6 @@ static void espi_send_vw_event_with_kbdata(uint8_t index, uint8_t data, uint32_t
 					   const struct device *dev)
 {
 	const struct espi_rts5918_config *const espi_config = dev->config;
-	struct espi_rts5918_data *const espi_data = dev->data;
 	volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
 	volatile struct kbc_reg *const kbc_reg = espi_config->kbc_reg;
 	uint32_t i;
@@ -2798,7 +2795,6 @@ static void espi_saf_erase_cmd_isr(const struct device *dev)
 
 	if(espi_reg->EFSTS & ESPI_EFSTS_SAFERS) {
 		const uint32_t safs_flash_addr = espi_reg->ESRXADR;
-		const uint32_t safs_flash_len = espi_reg->ESRXLEN;
 		int key = irq_lock();
 		// Make sure sector erase is not swapped-out
 		irq_disable(40);
@@ -2969,7 +2965,6 @@ static void espi_flash_chg_isr(const struct device *dev)
 				 .evt_details = ESPI_CHANNEL_FLASH,
 				 .evt_data = 0};
 
-	uint32_t status = espi_reg->EFSTS;
 	uint32_t config = espi_reg->EFCONF;
 
 	if (1) {

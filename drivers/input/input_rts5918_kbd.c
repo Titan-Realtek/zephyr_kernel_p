@@ -132,7 +132,6 @@ static int rts5918_kbd_init(const struct device *dev)
 
 	volatile struct kbm_regs *inst = config->base;
 
-	const uint32_t kso_mask = BIT_MASK(common->col_size) & ~config->kso_ignore_mask;
 	const uint32_t ksi_mask = BIT_MASK(common->row_size);
 
 	uint32_t status;
