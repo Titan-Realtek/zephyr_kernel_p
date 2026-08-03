@@ -1,0 +1,27 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Point the generic "i3c-controller-0" alias at this board's controller-mode
+ * I3C instance. Change the phandle to match the instance you configured as a
+ * controller in the board .dts.
+ *
+ * For Hot Join / IBI to surface a target at the Zephyr level, the expected
+ * target(s) must be declared as child nodes of that controller node (with
+ * their PID via reg), e.g.:
+ *
+ *   &i3c4 {
+ *       status = "okay";
+ *       ...
+ *       some_target: target@3100... {
+ *           compatible = "realtek,rts5918-i3c-target";
+ *           reg = <0x31 0x04ba 0x00001004>;
+ *           assigned-address = <0x09>;
+ *       };
+ *   };
+ */
+
+/ {
+	aliases {
+		i3c-controller-0 = &i3c4;
+	};
+};
