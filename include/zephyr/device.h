@@ -1191,7 +1191,86 @@ device_get_dt_nodelabels(const struct device *dev)
 
 DT_FOREACH_STATUS_OKAY_NODE(Z_MAYBE_DEVICE_DECLARE_INTERNAL)
 
+/** @brief Expands to the full type. */
+#define Z_DEVICE_API_TYPE(_class) _CONCAT(_class, _driver_api)
+
+/** @brief Helper to get API pointer. */
+#define Z_DEVICE_API_GET(_class, _dev) ((const struct Z_DEVICE_API_TYPE(_class) *)_dev->api)
+
+/** @brief Linker symbol marking end of class section including child sections. */
+#define Z_DEVICE_API_EXT_END(_struct_type) CONCAT(_, _struct_type, _ext_end)
+
 /** @endcond */
+
+
+/**
+ * @brief Wrapper macro for declaring device API structs inside iterable sections.
+ *
+ * @param _class The device API class.
+ * @param _name The API instance name.
+ */
+#define DEVICE_API(_class, _name) const STRUCT_SECTION_ITERABLE(Z_DEVICE_API_TYPE(_class), _name)
+
+/**
+ * @brief Declare that API class @p _child is an extension of device API class @p _parent.
+ *
+ * This registers the parent-child relationship so that DEVICE_API_IS(_parent, dev) returns
+ * true for devices whose API is of the @p _child class. The parent API struct must be the
+ * first member of the child API struct.
+ *
+ * @param _child Name of child (extending) API class.
+ * @param _parent Name of parent (base) API class.
+ * @param _member Name of the first member of @p _child API class struct.
+ * This member must have the same type as the @p _parent API class struct.
+ *
+ * @internal
+ * In addition to build-time validation, this macro is used as a sentinel by parse_syscalls.py
+ * to identify the API classes that are extended from others and build an API class hierarchy.
+ * @endinternal
+ */
+#define DEVICE_API_EXTENDS(_child, _parent, _member)                                               \
+	CONTAINER_OF_VALIDATE((struct Z_DEVICE_API_TYPE(_parent) *)0,                              \
+			      struct Z_DEVICE_API_TYPE(_child), _member)                           \
+	BUILD_ASSERT(offsetof(struct Z_DEVICE_API_TYPE(_child), _member) == 0,                     \
+		     "Parent API struct must be the first member of child API struct")
+
+/**
+ * @brief Macro that evaluates to a boolean that can be used to check if
+ *        a device is of a particular class.
+ *
+ * @param _class The device API class.
+ * @param _dev The device instance pointer.
+ *
+ * @retval true If the device is of the given class
+ * @retval false If the device is not of the given class
+ */
+#define DEVICE_API_IS(_class, _dev)                                                                \
+	({                                                                                         \
+		STRUCT_SECTION_START_EXTERN(Z_DEVICE_API_TYPE(_class));                            \
+		extern const uint8_t Z_DEVICE_API_EXT_END(Z_DEVICE_API_TYPE(_class))[];            \
+                                                                                                   \
+		((const uint8_t *)Z_DEVICE_API_GET(_class, _dev) <                                 \
+			 Z_DEVICE_API_EXT_END(Z_DEVICE_API_TYPE(_class)) &&                        \
+		 (const uint8_t *)Z_DEVICE_API_GET(_class, _dev) >=                                \
+			 (const uint8_t *)STRUCT_SECTION_START(Z_DEVICE_API_TYPE(_class)));        \
+	})
+
+/**
+ * @brief Expands to the pointer of a device's API for a given class.
+ *
+ * @param _class The device API class.
+ * @param _dev The device instance pointer.
+ *
+ * @return the pointer to the device API.
+ */
+#define DEVICE_API_GET(_class, _dev)                                                               \
+	({                                                                                         \
+		IF_ENABLED(CONFIG_DEVICE_API_ASSERT, (                                             \
+		__ASSERT(_dev != NULL, "device is NULL");                                          \
+		__ASSERT(DEVICE_API_IS(_class, _dev), "device API is not %s", STRINGIFY(_class));  \
+		));                                                                                \
+		Z_DEVICE_API_GET(_class, _dev);                                                    \
+	})
 
 #ifdef __cplusplus
 }
