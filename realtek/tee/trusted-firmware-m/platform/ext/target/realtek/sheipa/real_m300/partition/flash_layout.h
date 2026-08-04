@@ -75,6 +75,13 @@
 
 /* Flash layout info for BL2 bootloader */
 /* Same as FLASH0_BASE_S */
+/*
+ * All FLASH_AREA_*_OFFSET below are region-relative (start at 0). The EC image
+ * lives at a physical byte offset inside the larger host-shared BIOS SPI NOR;
+ * that offset is applied at the SPI transfer layer by FLASH_REGION_BASE_OFFSET
+ * in cmsis_drivers/Driver_Flash.c (currently 0x10FC000), NOT here. Keep this at
+ * 0x0 so the SRAM-alias arithmetic and MCUboot flash_map stay unchanged.
+ */
 #define FLASH_BASE_ADDRESS              (0x000)
 
 /* Offset and size definitions of the flash partitions that are handled by the

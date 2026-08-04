@@ -79,6 +79,25 @@
 
 #define FLASH_PAGE_SZ       (256U)  /* Page-program granularity */
 
+/*
+ * Physical base offset of the EC firmware region inside the (larger,
+ * host-shared) BIOS SPI NOR. TF-M / MCUboot / boot_hal_bl2 all address flash
+ * with region-relative offsets: FLASH_AREA_*_OFFSET in flash_layout.h start at
+ * 0 (BL2@0, S@0xB000, NS@0x38000) and merge_flash_bin.sh builds a 0-based
+ * flash_full.bin. The whole image is programmed at this byte offset in the
+ * shared NOR, so every SPI transfer this driver issues is translated
+ * offset -> physical here (the single choke point). is_range_valid() still
+ * bounds the relative offset against the 4 MB region geometry, so the base is
+ * added only at the SPI layer, after validation. Must stay sector-aligned
+ * (0x1000). 0 = image sits at the start of the flash.
+ *
+ * 0x10FC000 (~16.98 MB) requires 32-bit addressing; FLASH_USE_4BYTE_ADDR=1
+ * (below) already selects the 4-byte-address opcodes, so no extra change.
+ */
+#ifndef FLASH_REGION_BASE_OFFSET
+#define FLASH_REGION_BASE_OFFSET (0x10FC000U)
+#endif
+
 /* SPI NOR command set (subset of Zephyr's spi_nor.h used here). */
 #define SPI_NOR_CMD_WREN     (0x06U) /* Write Enable                 */
 #define SPI_NOR_CMD_WRDI     (0x04U) /* Write Disable                */
@@ -712,6 +731,9 @@ static int flash_program_page(uint32_t address, const uint8_t *data, uint32_t si
     int ret = 0;
     uint32_t offset = 0, chunk = 0, page_size = FLASH_PAGE_SZ;
 
+    /* Translate region-relative offset -> physical SPI address. */
+    address += FLASH_REGION_BASE_OFFSET;
+
     spic_usermode();
     while (size > 0) {
         ret = flash_write_enable();
@@ -748,6 +770,9 @@ static int flash_erase_sector(uint32_t address)
     struct qspi_cmd *command = &command_default;
     int ret;
     uint32_t len = 0;
+
+    /* Translate region-relative offset -> physical SPI address. */
+    address += FLASH_REGION_BASE_OFFSET;
 
     spic_usermode();
     ret = flash_write_enable();
@@ -802,7 +827,8 @@ static int flash_normal_read(uint8_t rdcmd, uint8_t dummy, uint32_t address,
     enum spic_address_size addr_size = FLASH_ADDR_SIZE;
     int ret;
 
-    uint32_t src_addr = address;
+    /* Translate region-relative offset -> physical SPI address. */
+    uint32_t src_addr = address + FLASH_REGION_BASE_OFFSET;
     uint8_t *dst_idx = data;
 
     uint32_t remind_size = size;
