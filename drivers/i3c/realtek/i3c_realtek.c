@@ -158,11 +158,15 @@ static void i3c_realtek_isr(const struct device *dev)
 	rtk_i3c_isr(&data->rtk_ctx);
 }
 
-static int i3c_realtek_attach_i3c_device(const struct device *dev, struct i3c_device_desc *target,
-					 uint8_t addr)
+static int i3c_realtek_attach_i3c_device(const struct device *dev, struct i3c_device_desc *target)
 {
 	struct i3c_realtek_data *data = dev->data;
 	const char *name = target->dev ? target->dev->name : "i3c";
+	/* The subsystem no longer passes the attach address (I3C API 4.4.1); derive
+	 * it the same way i3c_attach_i3c_device() does: dynamic if assigned, else
+	 * static.
+	 */
+	uint8_t addr = target->dynamic_addr ? target->dynamic_addr : target->static_addr;
 
 	for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
 		if (data->tagt_table[i].info.char_info.pid == 0 ||
@@ -509,12 +513,39 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		 */
 		if (data->target_config != NULL && data->target_config->callbacks != NULL) {
 			target_cb = data->target_config->callbacks;
-			if (target_cb->write_received_cb != NULL) {
-				for (uint32_t i = 0; i < args->count; i++) {
-					target_cb->write_received_cb(data->target_config,
-								     data->rx_buf[i]);
+			/* The RX is fully buffered, so the whole controller write
+			 * surfaces here at once.
+			 */
+#ifdef CONFIG_I3C_TARGET_BUFFER_MODE
+			/* Buffer-mode apps (e.g. MCTP-over-I3C) take the whole write
+			 * in one shot. Prefer this over the byte-by-byte replay when a
+			 * buffer callback is registered.
+			 */
+			if (target_cb->buf_write_received_cb != NULL) {
+				target_cb->buf_write_received_cb(data->target_config,
+								 data->rx_buf, args->count);
+			} else
+#endif
+			{
+				/* Replay the standard byte-oriented target callback
+				 * sequence the API defines (write_requested ->
+				 * write_received per byte) so apps that key off
+				 * write_requested_cb (e.g. to reset their RX buffer /
+				 * mark the transfer direction) work unchanged.
+				 */
+				if (target_cb->write_requested_cb != NULL) {
+					target_cb->write_requested_cb(data->target_config);
+				}
+				if (target_cb->write_received_cb != NULL) {
+					for (uint32_t i = 0; i < args->count; i++) {
+						target_cb->write_received_cb(data->target_config,
+									     data->rx_buf[i]);
+					}
 				}
 			}
+			/* STOP terminates the write; buffer-mode apps (MCTP) act on it
+			 * to hand the received packet up the stack.
+			 */
 			if (target_cb->stop_cb != NULL) {
 				target_cb->stop_cb(data->target_config);
 			}
@@ -531,6 +562,16 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		k_sem_give(&data->xfer_end);
 		if (data->target_config != NULL && data->target_config->callbacks != NULL) {
 			target_cb = data->target_config->callbacks;
+			/* The controller-read data was supplied up front via
+			 * i3c_target_tx_write(), so read_requested_cb is not used to fetch
+			 * the first byte here; it is replayed only so apps that mark the
+			 * transfer direction on it (paired with stop_cb) behave correctly.
+			 */
+			if (target_cb->read_requested_cb != NULL) {
+				uint8_t first = 0U;
+
+				target_cb->read_requested_cb(data->target_config, &first);
+			}
 			if (target_cb->stop_cb != NULL) {
 				target_cb->stop_cb(data->target_config);
 			}
@@ -574,8 +615,8 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		data->num_xfer = args->count;
 #if defined(CONFIG_I3C_USE_IBI) && defined(CONFIG_I3C_IBI_WORKQUEUE)
 		if (args->ibi_type == RTK_I3C_IBI_INTR) {
-			struct i3c_device_desc *ibi_target = i3c_dev_list_i3c_addr_find(
-				&data->common.attached_dev, args->ibi_addr);
+			struct i3c_device_desc *ibi_target =
+				i3c_dev_list_i3c_addr_find(dev, args->ibi_addr);
 
 			if (ibi_target != NULL && ibi_target->ibi_cb != NULL) {
 				/* Payload includes the MDB as byte 0. */
@@ -693,7 +734,7 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 		break;
 	case I3C_CONFIG_TARGET:
 		target_cfg = bus_config;
-		if (!target_cfg->enable) {
+		if (!target_cfg->enabled) {
 			ret = -ENOTSUP;
 			break;
 		}
@@ -739,7 +780,7 @@ static int i3c_realtek_config_get(const struct device *dev, enum i3c_config_type
 	case I3C_CONFIG_TARGET: {
 		struct i3c_config_target *target_cfg = bus_config;
 
-		target_cfg->enable = true;
+		target_cfg->enabled = true;
 		target_cfg->static_addr = data->rtk_cfg.tagt_info.stc_addr;
 		target_cfg->pid = data->rtk_cfg.tagt_info.char_info.pid;
 		target_cfg->bcr = data->rtk_cfg.tagt_info.char_info.bcr;
@@ -1119,7 +1160,8 @@ static int i3c_realtek_target_unregister(const struct device *dev, struct i3c_ta
 	return 0;
 }
 
-static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len)
+static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, uint16_t len,
+				       uint8_t hdr_mode)
 {
 	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_msg msg = {
@@ -1133,6 +1175,11 @@ static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, u
 
 	if (buf == NULL || len == 0U) {
 		return -EINVAL;
+	}
+
+	/* Target TX preload is SDR only; HDR read-back is not supported. */
+	if (hdr_mode != 0U) {
+		return -ENOTSUP;
 	}
 
 	k_mutex_lock(&data->bus_lock, K_FOREVER);
@@ -1243,7 +1290,7 @@ static int i3c_realtek_init(const struct device *dev)
 		}
 	} else if (config->role == RTK_I3C_TAGT) {
 		struct i3c_config_target target_cfg = {
-			.enable = true,
+			.enabled = true,
 			.static_addr = config->static_addr,
 			.pid = config->pid,
 			.bcr = config->bcr,

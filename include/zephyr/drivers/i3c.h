@@ -42,6 +42,18 @@
 extern "C" {
 #endif
 
+/*
+ * Compatibility shim: the I3C 4.4.1 mem-slab helpers (i3c_mem_slab.c,
+ * i3c_i2c_mem_slab.c) use K_MEM_SLAB_DEFINE_TYPE(), a newer-kernel convenience
+ * macro absent from this kernel base. It is just K_MEM_SLAB_DEFINE() with the
+ * block size and alignment taken from the element type. Drop this once the
+ * kernel provides it.
+ */
+#ifndef K_MEM_SLAB_DEFINE_TYPE
+#define K_MEM_SLAB_DEFINE_TYPE(name, type, slab_num_blocks)                                        \
+	K_MEM_SLAB_DEFINE(name, sizeof(type), slab_num_blocks, __alignof__(type))
+#endif
+
 /**
  * @brief Max and min Open Drain timings.
  *        Standard I3C SDR and I2C FM speed
@@ -1270,6 +1282,19 @@ struct i3c_dev_list {
 	 */
 	const uint8_t num_i2c;
 };
+
+/**
+ * @name I3C controller driver config flags
+ * @{
+ */
+
+/** Do not run i3c_bus_init() during driver initialization. */
+#define I3C_CONTROLLER_FLAG_DISABLE_BUS_INIT   BIT(0)
+
+/** Do not enable Hot-Join ACKs at the end of bus initialization. */
+#define I3C_CONTROLLER_FLAG_DISABLE_HJ_AT_INIT BIT(1)
+
+/** @} */
 
 /**
  * This structure is common to all I3C drivers and is expected to be
