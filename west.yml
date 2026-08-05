@@ -342,7 +342,10 @@ manifest:
     - name: zcbor
       revision: 75d088037eb237b18e7ec1f47c9ce494b9b95aab
       path: modules/lib/zcbor
-
+    - name: libmctp
+      repo-path: libmctp
+      path: modules/lib/libmctp
+      revision: b97860e78998551af99931ece149eeffc538bdb1
   self:
     path: zephyr
     west-commands: scripts/west-commands.yml
