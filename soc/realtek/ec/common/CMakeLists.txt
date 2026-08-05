@@ -18,11 +18,16 @@ if (CONFIG_REALTEK_RTS5918_IMG_HEADER)
         -I ${PROJECT_BINARY_DIR}/zephyr.bin
         -O ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}
         -L ${CONFIG_REALTEK_RTS_IMG_HEADER_LOAD_ADDRESS}
-        -H SHA2_384
-        -s ${IMG_TOOL_DIR}/sk.bin
-        -p ${IMG_TOOL_DIR}/pk.bin
+        -H SHA3_512
+        -DH SHA2_384
+        -s ${IMG_TOOL_DIR}/mldsa87.pri.bin
+        -p ${IMG_TOOL_DIR}/mldsa87.pub.bin
+        -Ds ${IMG_TOOL_DIR}/sk.bin
+        -Dp ${IMG_TOOL_DIR}/pk.bin
         -k SHA2_384
-        -S ECDSA
+        -Dk SHA2_384
+        -S MLDSA
+        -D
     )
     set(NEEDS_IMG_GEN TRUE)
 endif()
@@ -36,6 +41,8 @@ if (NEEDS_IMG_GEN)
         --gap-fill 0xFF --pad-to 0x1000000 
         ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME} 
         ${PROJECT_BINARY_DIR}/${RTS_PAD_BIN_NAME}
+    COMMAND ${PYTHON_EXECUTABLE} ${IMG_TOOL_DIR}/image_parser.py
+        ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME} > ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}.info
     )
 
 endif()
