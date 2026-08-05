@@ -1,0 +1,2 @@
+# libmctp Kconfig
+# Default is empty — MCTP config is already in the Zephyr tree
