@@ -22,6 +22,7 @@ import sys
 
 from ecdsa import SigningKey, NIST384p
 from ecdsa.util import sigencode_string, sigencode_der
+from dilithium_py.dilithium import Dilithium5
 
 IMAGE_MAGIC = 0x524C544B  # ASCII 'RLTK'
 IMAGE_HDR_SIZE = 32
@@ -196,7 +197,7 @@ def parse_args():
         type=str,
         dest="key_hash_alg",
         default=None,
-        choices=[None, "SHA2_384", "SHA3_384"],
+        choices=[None, "SHA2_384", "SHA3_384", "SHA3_512"],
         help="Select algorithm for public key hash.",
     )
 
@@ -224,7 +225,7 @@ def parse_args():
         type=str,
         dest="dual_image_hash_alg",
         default="SHA2_384",
-        choices=["SHA2_384", "SHA3_384"],
+        choices=["SHA2_384", "SHA3_384", "SHA3_512"],
         help="Select algorithm for image hash.",
     )
 
@@ -253,7 +254,7 @@ def parse_args():
         type=str,
         dest="dual_key_hash_alg",
         default="SHA2_384",
-        choices=["SHA2_384", "SHA3_384"],
+        choices=["SHA2_384", "SHA3_384", "SHA3_512"],
         help="Select algorithm for public key hash.",
     )
 
@@ -622,7 +623,7 @@ def calculate_dual_signature(dual_sign, key_index, dual_public_key_bin, dual_sec
         error_message += (f"{RESET_TEXT_COLOR}")
         sys.exit(error_message)
 
-    signature = ecdsa_sk.sign_digest_deterministic(image_hash, hashfunc=hashlib.sha384, sigencode=sigencode_der)
+    signature = ecdsa_sk.sign_digest_deterministic(image_hash, hashfunc=hashlib.sha384, sigencode=sigencode_string)
     with open("signature2.bin", "wb") as signature_file:
         signature_file.write(signature)
         signature_file.flush()
