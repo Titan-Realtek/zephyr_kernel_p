@@ -1,5 +1,12 @@
 * text=auto
 
+# Patch files must stay byte-exact (LF) on EVERY platform. With `* text=auto`
+# above, a Windows checkout (core.autocrlf=true) rewrites them LF->CRLF, and
+# `git apply` then dies with "corrupt patch" on the zero-length blank context
+# line (hit on lib/ext/cmsis/0001-iar-Add-missing-v8.1m-check.patch:19).
+# -text = never EOL-normalize, so the byte-for-byte LF form is preserved.
+*.patch -text
+
 # Binary files that should not be normalized
 *.pdf binary
 *.png binary
