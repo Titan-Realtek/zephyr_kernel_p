@@ -196,7 +196,7 @@ static void echo_worker(void *p1, void *p2, void *p3)
 			continue;
 		}
 
-		int ret = i3c_target_tx_write(echo->dev, echo->buf, echo->echo_len);
+		int ret = i3c_target_tx_write(echo->dev, echo->buf, echo->echo_len, 0);
 
 		if (ret < 0) {
 			LOG_ERR("%s: tx preload failed (%d)", echo->dev->name, ret);

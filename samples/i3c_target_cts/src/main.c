@@ -223,7 +223,7 @@ static int cts_preload_response(struct cts_target *target)
 {
 	int ret;
 
-	ret = i3c_target_tx_write(target->dev, target->tx_buf, sizeof(target->tx_buf));
+	ret = i3c_target_tx_write(target->dev, target->tx_buf, sizeof(target->tx_buf), 0);
 	if (ret >= 0 && ret != sizeof(target->tx_buf)) {
 		LOG_WRN("%s: response preload short write (%d/%u) reg=0x%02x CSTR=0x%08x "
 			"ISR=0x%08x RISR=0x%08x",
