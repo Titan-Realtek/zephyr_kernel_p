@@ -77,12 +77,12 @@ int rtk_i3c_bus_alloc_tagt(rtk_i3c_bus_tagt_item *tagt_table,
  * @param addr dynamic addr
  * @param slot_ops 1 to occupy, 0 to free
  */
-static void rtk_i3c_bus_set_addr_slot(uint32_t *addr_slot, uint8_t addr, slot_ops slot_ops)
+static void rtk_i3c_bus_set_addr_slot(uint32_t *addr_slot, uint8_t addr, slot_ops ops)
 {
 	int bit_idx = addr / I3C_ADDR_SLOT_BITS;
 	int bit_off = addr % I3C_ADDR_SLOT_BITS;
 
-	BIT_FIELD_SET(addr_slot[bit_idx], bit_off, bit_off, slot_ops);
+	BIT_FIELD_SET(addr_slot[bit_idx], bit_off, bit_off, ops);
 }
 
 /**********************************************************************************************************************

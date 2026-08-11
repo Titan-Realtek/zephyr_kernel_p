@@ -522,8 +522,8 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			 * buffer callback is registered.
 			 */
 			if (target_cb->buf_write_received_cb != NULL) {
-				target_cb->buf_write_received_cb(data->target_config,
-								 data->rx_buf, args->count);
+				target_cb->buf_write_received_cb(data->target_config, data->rx_buf,
+								 args->count);
 			} else
 #endif
 			{
@@ -1337,15 +1337,15 @@ static const struct i3c_driver_api i3c_realtek_api = {
 #define I3C_REALTEK_ROLE(n)                                                                        \
 	COND_CODE_1(DT_INST_PROP(n, target_mode), (RTK_I3C_TAGT), (RTK_I3C_CTRL_PRIM))
 
-static int i3c_realtek_target_device_init(const struct device *dev)
-{
-	ARG_UNUSED(dev);
-	return 0;
-}
-
+/*
+ * Materialise a struct device for each I3C target child node so the
+ * i3c_device_desc's .dev = DEVICE_DT_GET(child) resolves at link time. These
+ * placeholder targets have no child-side driver, so no init is needed; the
+ * device model accepts a NULL init function.
+ */
 #define I3C_REALTEK_TARGET_DEVICE_DEFINE(node_id)                                                  \
-	I3C_DEVICE_DT_DEFINE(node_id, i3c_realtek_target_device_init, NULL, NULL, NULL,            \
-			     POST_KERNEL, CONFIG_I3C_CONTROLLER_INIT_PRIORITY, NULL);
+	I3C_DEVICE_DT_DEFINE(node_id, NULL, NULL, NULL, NULL, POST_KERNEL,                         \
+			     CONFIG_I3C_CONTROLLER_INIT_PRIORITY, NULL);
 
 #define I3C_REALTEK_INIT(n)                                                                        \
 	static void i3c_realtek_irq_config_##n(const struct device *dev);                          \

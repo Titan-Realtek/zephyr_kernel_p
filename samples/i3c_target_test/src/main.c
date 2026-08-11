@@ -143,6 +143,7 @@ static int echo_raise_ibi(struct echo_target *echo)
  * out and the target still serves echo afterwards. The same steps can be
  * re-triggered at any time via the `i3c_target hj` / `i3c_target ibi` shell cmds.
  */
+#if 0 // for test
 static void echo_startup_events(struct echo_target *echo)
 {
 	/* Give the bus/controller a moment to come up before hot-joining. */
@@ -162,6 +163,7 @@ static void echo_startup_events(struct echo_target *echo)
 
 	echo_raise_ibi(echo);
 }
+#endif
 
 static void echo_worker(void *p1, void *p2, void *p3)
 {
