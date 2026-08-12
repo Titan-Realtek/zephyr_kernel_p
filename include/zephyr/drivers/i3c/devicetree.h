@@ -248,25 +248,6 @@ extern "C" {
 #define I3C_I2C_DEVICE_ARRAY_DT_INST(inst)				\
 	I3C_I2C_DEVICE_ARRAY_DT(DT_DRV_INST(inst))
 
-/**
- * @brief Get the I3C controller config flags from devicetree.
- *
- * @param node_id Devicetree node identifier of the I3C controller.
- */
-#define I3C_CONTROLLER_CONFIG_FLAGS_DT(node_id)				\
-	((DT_PROP(node_id, disable_bus_init) ?				\
-		I3C_CONTROLLER_FLAG_DISABLE_BUS_INIT : 0) |		\
-	 (DT_PROP(node_id, disable_hj_at_init) ?			\
-		I3C_CONTROLLER_FLAG_DISABLE_HJ_AT_INIT : 0))
-
-/**
- * @brief Get the I3C controller config flags from a DT_DRV_COMPAT instance.
- *
- * @param inst Devicetree instance number of the I3C controller.
- */
-#define I3C_CONTROLLER_CONFIG_FLAGS_DT_INST(inst)			\
-	I3C_CONTROLLER_CONFIG_FLAGS_DT(DT_DRV_INST(inst))
-
 #ifdef __cplusplus
 }
 #endif

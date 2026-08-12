@@ -5,9 +5,9 @@
  *
  */
 
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/pmci/mctp/mctp_i2c_gpio_common.h>
-#include <zephyr/rtio/rtio.h>
+#include "zephyr/drivers/gpio.h"
+#include "zephyr/pmci/mctp/mctp_i2c_gpio_common.h"
+#include "zephyr/rtio/rtio.h"
 #include <zephyr/sys/__assert.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/uart.h>
@@ -42,7 +42,6 @@ static void rx_completion(struct rtio *r, const struct rtio_sqe *sqe, int result
 
 	LOG_DBG("giving pkt to mctp, len %d", b->rx_buf_len);
 	mctp_bus_rx(&b->binding, pkt);
-	mctp_pktbuf_free(pkt);
 
 	/* Walk our pending bits from the current index, and start the next one if needed */
 	struct mctp_i2c_gpio_controller_cb *cb = b->inflight_rx;

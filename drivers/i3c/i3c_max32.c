@@ -1079,7 +1079,7 @@ static int max32_i3c_do_daa(const struct device *dev)
 			 */
 			if ((target->static_addr != 0U) && (dyn_addr != target->static_addr)) {
 				i3c_addr_slots_mark_free(&data->common.attached_dev.addr_slots,
-							 target->static_addr);
+							 dyn_addr);
 			}
 
 			/* Emit process DAA again to send the address to the device */
@@ -1729,8 +1729,7 @@ static int max32_i3c_init(const struct device *dev)
 
 	cfg->irq_config_func(dev);
 
-	if (cfg->common.dev_list.num_i3c > 0 &&
-	    !(cfg->common.flags & I3C_CONTROLLER_FLAG_DISABLE_BUS_INIT)) {
+	if (cfg->common.dev_list.num_i3c > 0) {
 		ret = i3c_bus_init(dev, &cfg->common.dev_list);
 		if (ret) {
 			LOG_ERR("Failed to do i3c bus init, err=%d", ret);
@@ -1880,7 +1879,6 @@ static DEVICE_API(i3c, max32_i3c_driver_api) = {
 		.common.dev_list.num_i3c = ARRAY_SIZE(max32_i3c_device_array_##id),                \
 		.common.dev_list.i2c = max32_i3c_i2c_device_array_##id,                            \
 		.common.dev_list.num_i2c = ARRAY_SIZE(max32_i3c_i2c_device_array_##id),            \
-		.common.flags = I3C_CONTROLLER_CONFIG_FLAGS_DT_INST(id),                           \
 		.pctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(id),                                       \
 		.disable_open_drain_high_pp = DT_INST_PROP(id, disable_open_drain_high_pp),        \
 	};                                                                                         \

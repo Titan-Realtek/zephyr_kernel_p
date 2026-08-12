@@ -7,7 +7,7 @@ zephyr_syscall_header(${ZEPHYR_BASE}/include/zephyr/drivers/i3c.h)
 zephyr_library()
 
 zephyr_library_sources_ifdef(CONFIG_I3C_CONTROLLER i3c_ccc.c)
-zephyr_library_sources(i3c_common.c)
+zephyr_library_sources_ifdef(CONFIG_I3C_CONTROLLER i3c_common.c)
 
 if(DEFINED CONFIG_I3C_NUM_OF_DESC_MEM_SLABS AND CONFIG_I3C_NUM_OF_DESC_MEM_SLABS GREATER 0)
   zephyr_library_sources(i3c_mem_slab.c)
@@ -45,7 +45,6 @@ zephyr_library_sources_ifdef(CONFIG_I3C_NPCX i3c_npcx.c)
 zephyr_library_sources_ifdef(CONFIG_I3C_RENESAS_RA i3c_renesas_ra.c)
 zephyr_library_sources_ifdef(CONFIG_I3C_STM32 i3c_stm32.c)
 zephyr_library_sources_ifdef(CONFIG_I3C_TEST i3c_test.c)
-# zephyr-keep-sorted-stop
 
 zephyr_library_sources_ifdef(
   CONFIG_I3C_REALTEK
@@ -65,3 +64,4 @@ zephyr_library_include_directories_ifdef(
   realtek/src
   realtek/src/core
 )
+# zephyr-keep-sorted-stop

@@ -277,22 +277,6 @@ struct i3c_target_callbacks {
 	 * @return Ignored.
 	 */
 	int (*controller_handoff_cb)(struct i3c_target_config *config);
-
-#if defined(CONFIG_I3C_PATCH_CODE)
-	// Reason: When CONFIG_STM32_I3C_INT_BUSYLOOP is enabled, 
-	// i3c_target_tx_write cannot be executed before i3c_ibi_raise, 
-	// as it starts writing to the FIFO first and results in an infinite loop. 
-	// Therefore, a callback was added to detect the end of the IBI after i3c_ibi_raise is called.
-	/**
-	 * @brief Function called when the IBI is completed.
-	 *
-	 * @param config Configuration structure associated with the
-	 *               device to which the operation is addressed.
-	 *
-	 * @return Ignored.
-	 */
-	int (*ibi_end_cb)(struct i3c_target_config *config);
-#endif	/* CONFIG_I3C_PATCH_CODE */
 };
 
 __subsystem struct i3c_target_driver_api {

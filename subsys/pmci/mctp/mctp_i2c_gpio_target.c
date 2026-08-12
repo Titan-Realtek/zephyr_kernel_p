@@ -5,7 +5,7 @@
  *
  */
 
-#include <zephyr/pmci/mctp/mctp_i2c_gpio_common.h>
+#include "zephyr/pmci/mctp/mctp_i2c_gpio_common.h"
 #include <zephyr/sys/__assert.h>
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/uart.h>
@@ -154,7 +154,6 @@ int mctp_i2c_gpio_target_stop(struct i2c_target_config *config)
 			LOG_DBG("stop rx msg, give pkt");
 			/* Give message to mctp to process */
 			mctp_bus_rx(&b->binding, b->rx_pkt);
-			mctp_pktbuf_free(b->rx_pkt);
 			b->rx_pkt = NULL;
 			b->rx_exp_len = 0;
 			break;
