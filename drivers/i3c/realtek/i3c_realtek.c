@@ -563,14 +563,27 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		if (data->target_config != NULL && data->target_config->callbacks != NULL) {
 			target_cb = data->target_config->callbacks;
 			/* The controller-read data was supplied up front via
-			 * i3c_target_tx_write(), so read_requested_cb is not used to fetch
-			 * the first byte here; it is replayed only so apps that mark the
-			 * transfer direction on it (paired with stop_cb) behave correctly.
+			 * i3c_target_tx_write(), so the read callback is not used to
+			 * fetch data here; it is replayed only so apps that mark the
+			 * transfer direction (paired with stop_cb) behave correctly.
 			 */
-			if (target_cb->read_requested_cb != NULL) {
-				uint8_t first = 0U;
+#ifdef CONFIG_I3C_TARGET_BUFFER_MODE
+			/* Buffer-mode apps get the buffer-oriented read notification.
+			 * Data was preloaded via i3c_target_tx_write(), so ptr/len/
+			 * hdr_mode are NULL: this only signals the read, matching the
+			 * npcx / it51xxx target drivers.
+			 */
+			if (target_cb->buf_read_requested_cb != NULL) {
+				target_cb->buf_read_requested_cb(data->target_config, NULL, NULL,
+								 NULL);
+			} else
+#endif
+			{
+				if (target_cb->read_requested_cb != NULL) {
+					uint8_t first = 0U;
 
-				target_cb->read_requested_cb(data->target_config, &first);
+					target_cb->read_requested_cb(data->target_config, &first);
+				}
 			}
 			if (target_cb->stop_cb != NULL) {
 				target_cb->stop_cb(data->target_config);
