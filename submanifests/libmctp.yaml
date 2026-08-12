@@ -1,0 +1,14 @@
+# libmctp module, required by the MCTP (PMCI) subsystem backported from
+# Zephyr 4.4.2. subsys/pmci/mctp/*.c include <libmctp.h> / <libmctp-alloc.h>
+# from this module. Revision pinned to upstream Zephyr v4.4.2 west.yml
+# (identical to v4.4.1's libmctp revision).
+# No group: this project uses MCTP by default, so libmctp is always fetched.
+manifest:
+  remotes:
+    - name: upstream
+      url-base: https://github.com/zephyrproject-rtos
+  projects:
+    - name: libmctp
+      revision: b97860e78998551af99931ece149eeffc538bdb1
+      path: modules/lib/libmctp
+      remote: upstream

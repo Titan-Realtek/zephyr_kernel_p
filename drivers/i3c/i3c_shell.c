@@ -14,6 +14,30 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(i3c_shell, CONFIG_LOG_DEFAULT_LEVEL);
 
+/*
+ * Compatibility shim: this i3c_shell.c came with the I3C 4.4.2 bump and uses
+ * SHELL_HELP(description, usage), a newer-shell macro that is absent from this
+ * (3.7.2-era) shell base. Here shell_static_entry.help is a plain const char *,
+ * so fold the description and usage into a single help string. Adjacent string
+ * literals are concatenated during preprocessing, keeping the result a constant
+ * initializer. Drop this once the shell subsystem is bumped to match.
+ */
+#ifndef SHELL_HELP
+#define SHELL_HELP(_description, _usage) _description "\n" _usage
+#endif
+
+/*
+ * Same story for these shell helpers introduced with the newer shell: resolve
+ * a device by name (the nodelabel fallback of the real helper is not needed
+ * here), and print uncoloured text via the existing shell_fprintf().
+ */
+#ifndef shell_device_get_binding
+#define shell_device_get_binding(name) device_get_binding(name)
+#endif
+#ifndef shell_fprintf_normal
+#define shell_fprintf_normal(sh, ...) shell_fprintf(sh, SHELL_NORMAL, __VA_ARGS__)
+#endif
+
 #define MAX_BYTES_FOR_REGISTER_INDEX 4
 #define ARGV_DEV                     1
 #define ARGV_TDEV                    2
