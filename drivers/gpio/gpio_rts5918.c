@@ -22,13 +22,13 @@
  * inside `if INPUT_KBD_MATRIX` and breaks the build on boards (like
  * Bison) that haven't enabled the keyboard matrix yet.
  */
-#if defined(CONFIG_INPUT_KBD_MATRIX) && \
-    DT_NODE_HAS_STATUS(DT_NODELABEL(kbd), okay)
-#include <zephyr/input/input_kbd_matrix.h>
-#define RTS5918_GPIO_HAS_KBD 1
-#else
-#define RTS5918_GPIO_HAS_KBD 0
-#endif
+// #if defined(CONFIG_INPUT_KBD_MATRIX) && \
+//     DT_NODE_HAS_STATUS(DT_NODELABEL(kbd), okay)
+// #include <zephyr/input/input_kbd_matrix.h>
+// #define RTS5918_GPIO_HAS_KBD 1
+// #else
+// #define RTS5918_GPIO_HAS_KBD 0
+// #endif
 #include <reg/reg_gpio.h>
 
 LOG_MODULE_REGISTER(gpio_rts5918, CONFIG_GPIO_LOG_LEVEL);
@@ -456,9 +456,9 @@ static gpio_pin_t gpio_rts5918_get_intr_pin(volatile uint32_t *reg_base)
 
 static void gpio_rts5918_isr(const void *arg)
 {
-#if RTS5918_GPIO_HAS_KBD
-	const struct device *kbd_dev = DEVICE_DT_GET(DT_NODELABEL(kbd));
-#endif
+// #if RTS5918_GPIO_HAS_KBD
+// 	const struct device *kbd_dev = DEVICE_DT_GET(DT_NODELABEL(kbd));
+// #endif
 	const struct device *port = arg;
 	const struct gpio_rts5918_config *config = port->config;
 	struct gpio_rts5918_data *data = port->data;
@@ -468,12 +468,12 @@ static void gpio_rts5918_isr(const void *arg)
 	for (int pin = 0; pin < config->num_pins ; pin++){
 		if (gcr[pin] & GPIO_GCR_INTSTS_Msk) {
 			gcr[pin] |= GPIO_GCR_INTSTS_Msk;
-#if RTS5918_GPIO_HAS_KBD
-			if (((uintptr_t)&gcr[pin] == 0x40230170UL) ||
-			    ((uintptr_t)&gcr[pin] == 0x40230174UL)) {
-				input_kbd_matrix_poll_start(kbd_dev);
-			}
-#endif
+// #if RTS5918_GPIO_HAS_KBD
+// 			if (((uintptr_t)&gcr[pin] == 0x40230170UL) ||
+// 			    ((uintptr_t)&gcr[pin] == 0x40230174UL)) {
+// 				input_kbd_matrix_poll_start(kbd_dev);
+// 			}
+// #endif
 			gpio_fire_callbacks(&data->callbacks, port, BIT(pin));
 		}
 	}
