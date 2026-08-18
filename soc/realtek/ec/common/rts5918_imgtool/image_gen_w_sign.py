@@ -517,7 +517,7 @@ def calculate_signature(key_index, public_key_bin, secret_key_bin, signature_alg
         elif(current_os == "Windows"):
             ## Compute Signature
             # Load Dynamic-Link Library
-            dll_path = os.path.abspath("libpqcrystals_dilithium5_sign.dll")
+            dll_path = os.path.join(os.path.dirname(__file__), "libpqcrystals_dilithium5_sign.dll")
 
             # Use CDLL to Load Library
             try:
