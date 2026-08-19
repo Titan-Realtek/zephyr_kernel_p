@@ -639,6 +639,17 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg);
 int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *msg);
 
 /**
+ * @brief Abort the in-flight transfer and return the role to its idle state.
+ *
+ * Flushes the FIFOs, clears pending interrupt status and resets the core state
+ * back to CTRL/TAGT idle. Used to recover a stuck transfer (e.g. an IBI that
+ * timed out without being serviced).
+ *
+ * @param ctx Pointer to I3C context
+ */
+void rtk_i3c_abort_xfer(rtk_i3c_ctx *ctx);
+
+/**
  * @brief Deinitialize I3C target
  * @param ctx Pointer to I3C context
  * @return Status code
