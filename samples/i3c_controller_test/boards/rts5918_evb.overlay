@@ -37,12 +37,41 @@
  * target node).
  */
 &i3c4 {
+	/* Controller-mode config: the board .dts no longer enables i3c4, so this
+	 * overlay brings it up as an I3C controller.
+	 */
+	status = "okay";
+	pinctrl-0 = <&i3c04_scl_gpio014 &i3c04_sda_gpio017
+		     &i3c04_scl_gpio014_pin_sel &i3c04_sda_gpio017_pin_sel>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <4000000>;		/* I3C push-pull (PP): 4 MHz */
+	i3c-od-scl-hz = <1000000>;	/* I3C open-drain (OD): 1 MHz */
+	i2c-scl-hz = <400000>;
+	primary-controller-da = <0x7c>;
+
+	//SV6E
 	/* PID 0xFFA4BA84CE07 -> pid-msb 0xFFA4, pid-lsb 0xBA84CE07.
 	 * reg = <static-addr PID-msb PID-lsb>; static 0 = pure I3C (ENTDAA hot-join).
 	 */
-	hj_target0: target@000000ffa4ba84ce07 {
-		compatible = "realtek,rts5918-i3c-target";
-		reg = <0x00 0xffa4 0xba84ce07>;
-		assigned-address = <0x08>;
-	};
+	 hj_target0: target@ffa4ba84ce07 {
+	 	compatible = "realtek,rts5918-i3c-target";
+	 	reg = <0x00 0xffa4 0xba84ce07>;
+	 };
+
+	// temperature sensor
+	// /* PID 0x0236152A00AC -> pid-msb 0x0236, pid-lsb 0x152A00AC.
+	//  */
+	// hj_target1: target@236152a00ac {
+	// 	compatible = "realtek,rts5918-i3c-target";
+	// 	reg = <0x00 0x0236 0x152a00ac>;
+	// };
+
+	/* Legacy I2C device on the I3C bus. The middle reg cell (reg[1]) = 0 marks
+	 * the node as I2C rather than I3C. reg = <i2c-addr  0x00  LVR>; LVR 0 = has
+	 * 50 ns spike filter, FM+ mode.
+	 */
+	// i2c_dev0: target@640000000000000000 {
+	// 	compatible = "realtek,rts5918-i3c-target";
+	// 	reg = <0x64 0x00 0x00>;
+	// };
 };

@@ -1,8 +1,25 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  *
- * Map the CTS/register-model sample to the Realtek EVB target-mode I3C port.
+ * Configure i3c4 as an I3C target for the CTS/register-model sample and map
+ * the i3c-target-0 alias to it. The board .dts no longer enables i3c4, so this
+ * overlay carries the full target-mode node.
  */
+
+&i3c4 {
+	status = "okay";
+	target-mode;
+	pinctrl-0 = <&i3c04_scl_gpio014 &i3c04_sda_gpio017
+		     &i3c04_scl_gpio014_pin_sel &i3c04_sda_gpio017_pin_sel>;
+	pinctrl-names = "default";
+	static-addr = <0x31>;
+	pid-msb = <0x04ba>;
+	pid-lsb = <0x00001004>;
+	bcr = <0x16>;		/* IBI request-capable + IBI payload */
+	dcr = <0xc2>;
+	max-read-len = <256>;
+	max-write-len = <256>;
+};
 
 / {
 	aliases {
