@@ -610,6 +610,15 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			}
 			data->hj_enabled_prev = hj_now;
 		}
+		/* A CCC from the controller (e.g. ENEC/DISEC to enable/disable
+		 * IBI) leaves the core in STATE_TAGT_IDLE. Restore the resting RX
+		 * arm so a following controller private write is accepted instead
+		 * of dropped ("Target RXNE ignored"); mirrors the re-arm done on
+		 * the other target completion events.
+		 */
+		if (data->target_config != NULL) {
+			i3c_realtek_arm_rx(data);
+		}
 		k_sem_give(&data->ccc_end);
 		break;
 	case RTK_I3C_EVENT_IBI_WRITE_COMPLETE:
