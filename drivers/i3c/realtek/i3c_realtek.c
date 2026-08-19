@@ -760,6 +760,16 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 		data->rtk_cfg.tagt_info.char_info.dcr = target_cfg->dcr;
 		data->rtk_cfg.tagt_info.resp_info.max_read_len = target_cfg->max_read_len;
 		data->rtk_cfg.tagt_info.resp_info.max_write_len = target_cfg->max_write_len;
+		/* IPLS (EC[31:24]) is the IBI payload size this target reports via
+		 * GETMRL when BCR[2]==1. It is a capacity ceiling, not a per-IBI
+		 * length (the actual length is T-bit terminated at runtime), so
+		 * advertise the driver's IBI buffer size. resp_info.ibi_payload_len
+		 * defaults to 0, and set_resp_info writes it into IPLS, clobbering the
+		 * HW reset default (0x10); left at 0 the controller reads no payload
+		 * and even the mandatory MDB never reaches the bus.
+		 */
+		data->rtk_cfg.tagt_info.resp_info.ibi_payload_len =
+			(target_cfg->bcr & I3C_BCR_IBI_PAYLOAD) ? CONFIG_I3C_IBI_MAX_PAYLOAD_SIZE : 0U;
 		data->rtk_cfg.tagt_info.resp_info.hdr_mode = target_cfg->supported_hdr;
 		ret = i3c_realtek_err_to_errno(rtk_i3c_tagt_init(&data->rtk_ctx, &data->rtk_cfg));
 		if (ret == 0) {
@@ -1109,6 +1119,33 @@ static int i3c_realtek_ibi_enable(const struct device *dev, struct i3c_device_de
 	}
 	if (target->dynamic_addr == 0U) {
 		return -EINVAL;
+	}
+
+	/* Program the HW per-target "IBI carries a payload" bit for this address.
+	 * The ENTDAA path (handle_daa_phase / rtk_i3c_bus_handle_daa) does this
+	 * during address arbitration, but a target that got its address via
+	 * SETDASA (e.g. a static-addr device) never goes through that phase, so
+	 * the bit is left clear and a payload-carrying IBI (BCR bit2=1) stalls
+	 * after the address ACK — the core never clocks the MDB in. Set it here
+	 * (idempotent) so IBI payload works regardless of how the address was
+	 * assigned.
+	 */
+	rtk_i3c_set_ibi_mdb(&data->rtk_ctx, target->dynamic_addr,
+			    (target->bcr & I3C_BCR_IBI_PAYLOAD) != 0);
+
+	/* Sync this target's BCR into the bus-layer target table. The IBI receive
+	 * ISR (rtk_i3c_bus_get_bcr_by_addr) reads BCR bit2 from this table to decide
+	 * whether to assemble the IBI payload (incl. the MDB). The ENTDAA path fills
+	 * char_info there; a SETDASA target does not, so BCR stays 0 and a
+	 * payload-carrying IBI is silently dropped (payload_len 0). Fill it here.
+	 */
+	for (uint8_t i = 0; i < I3C_REALTEK_MAX_DEVS; i++) {
+		if (data->tagt_table[i].info.char_info.pid == target->pid) {
+			data->tagt_table[i].info.char_info.bcr = target->bcr;
+			data->tagt_table[i].info.dyn_addr = target->dynamic_addr;
+			data->tagt_table[i].active = true;
+			break;
+		}
 	}
 
 	/* Arm the RX buffer before enabling IBI at the target so the payload of an
