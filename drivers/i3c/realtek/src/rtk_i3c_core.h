@@ -1343,6 +1343,16 @@ static inline int rtk_i3c_core_wait_byfm_fifo(rtk_i3c_core *core)
 	return rtk_core_wait32(&core->csr, 14, 14, 0);
 }
 
+/* Wait for the Bus Available Condition: CSR.BBUSYN (bit 1) == 1 means the bus
+ * is NOT busy (a Stop / HDR-Exit has been seen). A target must see this before
+ * arbitrating an IBI; issuing the START too soon after the previous transaction
+ * loses arbitration / never completes.
+ */
+static inline int rtk_i3c_core_wait_bus_idle(rtk_i3c_core *core)
+{
+	return rtk_core_wait32(&core->csr, 1, 1, 1);
+}
+
 static inline uint32_t rtk_i3c_core_get_dsa(rtk_i3c_core *core)
 {
 	return rtk_core_read32(&core->dsa);

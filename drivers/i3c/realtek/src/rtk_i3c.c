@@ -1604,6 +1604,15 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 		}
 		xfer_buffer->msg.count = ret;
 	}
+	/* Only arbitrate once the bus reaches the Bus Available Condition
+	 * (CSR.BBUSYN=1). Right after the controller's write STOP the bus can still
+	 * read busy; starting the IBI too early loses arbitration and the transfer
+	 * never completes (it then only survived when slow logging masked the gap).
+	 */
+	if (rtk_i3c_core_wait_bus_idle(ctx->core) != 0) {
+		ret = RTK_I3C_TIMEOUT;
+		goto exit_error;
+	}
 	rtk_i3c_core_start_xfer(ctx->core);
 	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
 
