@@ -1392,14 +1392,14 @@ int rtk_i3c_tagt_init(rtk_i3c_ctx *ctx, rtk_i3c_cfg *cfg)
 	return 0;
 }
 
-#ifdef CONFIG_RTK_I3C_ETM
 /**
  * @brief Abort the in-flight transfer and return to the role's idle state.
  *
- * Used when the remote side terminates a transfer mid-way (ETM). Flush the
- * FIFOs for the current direction, drop the pending buffer, clear all pending
- * interrupt status (ISR/ISR1) and put the instance back to idle. Must be
- * called with interrupts masked by the caller.
+ * Flush the FIFOs for the current direction, drop the pending buffer, clear all
+ * pending interrupt status (ISR/ISR1) and put the instance back to idle. Used
+ * on ETM (remote terminated mid-transfer) and to recover a stuck transfer such
+ * as a target IBI that timed out without being serviced. Must be called with
+ * interrupts masked by the caller.
  */
 void rtk_i3c_abort_xfer(rtk_i3c_ctx *ctx)
 {
@@ -1426,7 +1426,6 @@ void rtk_i3c_abort_xfer(rtk_i3c_ctx *ctx)
 	ctx->state =
 		I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role) ? STATE_CTRL_IDLE : STATE_TAGT_IDLE;
 }
-#endif /* CONFIG_RTK_I3C_ETM */
 
 int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 {

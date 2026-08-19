@@ -1019,9 +1019,18 @@ static int i3c_realtek_ibi_raise_once(struct i3c_realtek_data *data, rtk_i3c_ibi
 
 	/* Wait for the outcome: RTK_I3C_EVENT_IBI_WRITE_COMPLETE (accepted, ibi_status
 	 * 0) or RTK_I3C_EVENT_ARBITRATE_FAIL (rejected/lost arbitration, ibi_status
-	 * -EAGAIN). A timeout means neither fired, e.g. no active controller.
+	 * -EAGAIN). A timeout means neither fired: the IBI START was issued but the
+	 * controller never serviced it (e.g. raised just outside the window the
+	 * controller was ready for, or no active controller).
 	 */
 	if (k_sem_take(&data->ibi_sem, I3C_REALTEK_IBI_TIMEOUT) != 0) {
+		/* The core is left in STATE_TAGT_IBI with the IBI frames still queued.
+		 * Abort back to idle so the caller can retry (or the next transfer can
+		 * run) instead of wedging on a later tx_write with -EBUSY.
+		 */
+		key = irq_lock();
+		rtk_i3c_abort_xfer(&data->rtk_ctx);
+		irq_unlock(key);
 		return -ETIMEDOUT;
 	}
 
@@ -1088,10 +1097,14 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 
 	for (int attempt = 0;; attempt++) {
 		ret = i3c_realtek_ibi_raise_once(data, ibi_type, msg_ptr);
-		/* Retry only on transient rejection / lost arbitration, not on a
-		 * timeout (no active controller) or a parameter/state error.
+		/* Retry on transient rejection / lost arbitration (-EAGAIN) and on a
+		 * timeout (-ETIMEDOUT). A target IBI raised just outside the window the
+		 * controller was ready for times out without being serviced;
+		 * ibi_raise_once has aborted the core back to idle, so re-raising once
+		 * the bus/controller is ready usually succeeds. Stop on a
+		 * parameter/state error or after retry_max attempts.
 		 */
-		if (ret != -EAGAIN || attempt >= retry_max) {
+		if ((ret != -EAGAIN && ret != -ETIMEDOUT) || attempt >= retry_max) {
 			break;
 		}
 		k_sleep(backoff);
