@@ -15,6 +15,17 @@
 #include <zephyr/pmci/mctp/mctp_i3c_common.h>
 #include <libmctp.h>
 
+/*
+ * Compatibility shim: this MCTP-over-I3C controller header came with the i3c
+ * 4.4.2 backport and uses DEVICE_DT_GET_BY_IDX(), which the 3.7.2-era device.h
+ * lacks. Compose it from the macros 3.7.2 does provide. Drop this once the
+ * kernel is bumped to a version that defines it.
+ */
+#ifndef DEVICE_DT_GET_BY_IDX
+#define DEVICE_DT_GET_BY_IDX(node_id, prop, idx)                                                    \
+	DEVICE_DT_GET(DT_PHANDLE_BY_IDX(node_id, prop, idx))
+#endif
+
 /**
  * @brief An MCTP binding for Zephyr's I3C interface using IBI interrupts for signaling
  */

@@ -1,0 +1,35 @@
+/*
+ * Copyright (c) 2026 Realtek Semiconductor Corp.
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * rts5918_evb as the MCTP-over-I3C bus owner (I3C controller) on i3c4.
+ * Pair with a second rts5918_evb running the i3c_bus_endpoint sample:
+ * wire the two boards' i3c4 SCL/SDA together, add bus pull-ups, and
+ * share a common ground.
+ *
+ * The child endpoint's reg (static-addr, PID-msb, PID-lsb) must match
+ * the target board's i3c4 node, and endpoint-ids must match its
+ * endpoint-id.
+ */
+
+&i3c4 {
+	status = "okay";
+	pinctrl-0 = <&i3c04_scl_gpio014 &i3c04_sda_gpio017
+		     &i3c04_scl_gpio014_pin_sel &i3c04_sda_gpio017_pin_sel>;
+	pinctrl-names = "default";
+	i3c-scl-hz = <4000000>;		/* I3C push-pull (PP): 4 MHz */
+	i3c-od-scl-hz = <1000000>;	/* I3C open-drain (OD): 1 MHz */
+
+	mctp_endpoint0: mctp-endpoint@4ba00001004 {
+		compatible = "zephyr,mctp-i3c-endpoint";
+		reg = <0x31 0x04ba 0x00001004>;
+	};
+};
+
+/ {
+	mctp_i3c: mctp_i3c {
+		compatible = "zephyr,mctp-i3c-controller";
+		endpoints = <&mctp_endpoint0>;
+		endpoint-ids = <11>;
+	};
+};

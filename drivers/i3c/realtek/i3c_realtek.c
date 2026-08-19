@@ -1397,14 +1397,19 @@ static const struct i3c_driver_api i3c_realtek_api = {
 	COND_CODE_1(DT_INST_PROP(n, target_mode), (RTK_I3C_TAGT), (RTK_I3C_CTRL_PRIM))
 
 /*
- * Materialise a struct device for each I3C target child node so the
- * i3c_device_desc's .dev = DEVICE_DT_GET(child) resolves at link time. These
+ * Materialise a struct device for each driverless RTK I3C target child node so
+ * the i3c_device_desc's .dev = DEVICE_DT_GET(child) resolves at link time. These
  * placeholder targets have no child-side driver, so no init is needed; the
  * device model accepts a NULL init function.
+ *
+ * Restrict this to realtek,rts5918-i3c-target children: a child that binds its
+ * own driver (e.g. zephyr,mctp-i3c-endpoint) already defines its device, so
+ * defining one here too would be a duplicate device-object definition.
  */
 #define I3C_REALTEK_TARGET_DEVICE_DEFINE(node_id)                                                  \
-	I3C_DEVICE_DT_DEFINE(node_id, NULL, NULL, NULL, NULL, POST_KERNEL,                         \
-			     CONFIG_I3C_CONTROLLER_INIT_PRIORITY, NULL);
+	IF_ENABLED(DT_NODE_HAS_COMPAT(node_id, realtek_rts5918_i3c_target),                        \
+		   (I3C_DEVICE_DT_DEFINE(node_id, NULL, NULL, NULL, NULL, POST_KERNEL,             \
+					 CONFIG_I3C_CONTROLLER_INIT_PRIORITY, NULL);))
 
 #define I3C_REALTEK_INIT(n)                                                                        \
 	static void i3c_realtek_irq_config_##n(const struct device *dev);                          \
