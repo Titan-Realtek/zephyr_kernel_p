@@ -292,10 +292,47 @@
 		input-enable;
 		input-schmitt-enable;
 	};
+	/omit-if-no-ref/ tacho1_gpio074_pin_sel: tacho1_gpio074_pin_sel
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX( REALTEK_RTS5918_PIN_SEL(IP_INPUT, BIT_LENGTH_2, 2, 0), 0)>;
+		input-enable;
+		input-schmitt-enable;
+	};
 
 	/omit-if-no-ref/ tacho2_gpio075: tacho2_gpio075
 	{
 		pinmux = <REALTEK_RTS5918_PINMUX(75, FUNC1)>;
+		input-enable;
+		input-schmitt-enable;
+	};
+	/omit-if-no-ref/ tacho2_gpio075_pin_sel: tacho2_gpio075_pin_sel
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX( REALTEK_RTS5918_PIN_SEL(IP_INPUT, BIT_LENGTH_2, 1, 2), 0)>;
+		input-enable;
+		input-schmitt-enable;
+	};
+	/omit-if-no-ref/ tacho2_gpio147: tacho2_gpio147
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX(75, FUNC3)>;
+		input-enable;
+		input-schmitt-enable;
+	};
+	/omit-if-no-ref/ tacho2_gpio147_pin_sel: tacho2_gpio147_pin_sel
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX( REALTEK_RTS5918_PIN_SEL(IP_INPUT, BIT_LENGTH_2, 2, 2), 0)>;
+		input-enable;
+		input-schmitt-enable;
+	};
+
+	/omit-if-no-ref/ tacho3_gpio114: tacho3_gpio114
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX(114, FUNC1)>;
+		input-enable;
+		input-schmitt-enable;
+	};
+	/omit-if-no-ref/ tacho3_gpio114_pin_sel: tacho3_gpio114_pin_sel
+	{
+		pinmux = <REALTEK_RTS5918_PINMUX( REALTEK_RTS5918_PIN_SEL(IP_INPUT, BIT_LENGTH_2, 1, 4), 0)>;
 		input-enable;
 		input-schmitt-enable;
 	};
