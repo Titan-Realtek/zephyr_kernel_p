@@ -61,6 +61,7 @@ static void rtk_i3c_calc_frame_msg(rtk_i3c_msg *msg, uint16_t addr, rtk_i3c_mode
 		/* I3C SDR: RTK_I3C_SDR_MODE, I2C 7-bit: RTK_I3C_I2C */
 		msg->data[0] = (uint8_t)(addr << 1 | (msg->flags & RTK_I3C_READ));
 		msg->len = 1;
+		// LOG_ERR("msg->data[0] %x addr %x", msg->data[0], addr);
 	}
 }
 
@@ -1227,12 +1228,13 @@ int rtk_i3c_tagt_xfer(rtk_i3c_ctx *ctx, rtk_i3c_msg *msg)
 		ctx->tx_buffer = (rtk_i3c_tx_buffer){0};
 		ctx->state = STATE_TAGT_IDLE;
 	} else if (ctx->state != STATE_TAGT_IDLE && !tx_preempt_rx) {
+		// LOG_ERR("RTK_I3C_BUSY");
 		return RTK_I3C_BUSY;
 	}
 
-	LOG_DBG("Target %d start to %s %zu bytes (%s)!\n", ctx->cfg->common_cfg.instance_id,
-		I3C_MSG_IS_READ(msg->flags) ? "read" : "write", msg->len,
-		I3C_MSG_IS_DMA(msg->flags) ? "DMA" : "CPU");
+	// LOG_ERR("Target %d start to %s %zu bytes (%s)!\n", ctx->cfg->common_cfg.instance_id,
+		// I3C_MSG_IS_READ(msg->flags) ? "read" : "write", msg->len,
+		// I3C_MSG_IS_DMA(msg->flags) ? "DMA" : "CPU");
 	if (!xfer_buffer) {
 		xfer_buffer = rtk_i3c_set_buffer(ctx, msg);
 	}
@@ -1276,23 +1278,24 @@ int rtk_i3c_tagt_deinit(rtk_i3c_ctx *ctx)
  */
 int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *msg)
 {
+	// printk("rtk_i3c_ibi_write\n");
 	ASSERT(ctx != NULL);
 	int ret = 0;
 
-	RETURN_ERROR_IF(I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role), RTK_I3C_NOT_SUPPORTED);
+	// RETURN_ERROR_IF(I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role), RTK_I3C_NOT_SUPPORTED);
 	/* A target that keeps RX armed between transfers sits in STATE_TAGT_PRV_READ.
 	 * Allow an IBI/HJ/CR to preempt that idle arm (no write bytes received yet),
 	 * the same way a TX read-response can; the RX arm is restored afterwards.
 	 */
 	bool ibi_preempt_rx = (ctx->state == STATE_TAGT_PRV_READ && ctx->rx_buffer.msg.count == 0U);
-	RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE && !ibi_preempt_rx, RTK_I3C_BUSY);
+	// RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE && !ibi_preempt_rx, RTK_I3C_BUSY);
 	bool invalid_payload = (ctx->cfg->tagt_info.char_info.bcr & I3C_BCR_IBI_PAYLOAD)
 				       ? (msg == NULL || msg->len == 0)
 				       : (msg != NULL && msg->len > 0);
-	RETURN_ERROR_IF(invalid_payload && ibi_type == RTK_I3C_IBI_INTR, RTK_I3C_INVAL_PARAM);
-	RETURN_ERROR_IF(!(ctx->cfg->tagt_info.char_info.bcr & I3C_BCR_CR_CAP) &&
-				ibi_type == RTK_I3C_IBI_CTRL_REQ,
-			RTK_I3C_INVAL_PARAM);
+	// RETURN_ERROR_IF(invalid_payload && ibi_type == RTK_I3C_IBI_INTR, RTK_I3C_INVAL_PARAM);
+	// RETURN_ERROR_IF(!(ctx->cfg->tagt_info.char_info.bcr & I3C_BCR_CR_CAP) &&
+				// ibi_type == RTK_I3C_IBI_CTRL_REQ,
+			// RTK_I3C_INVAL_PARAM);
 
 	uint8_t addr = 0;
 	bool is_read = false;
@@ -1309,11 +1312,12 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 		is_read = false;
 	} else if (ibi_type == RTK_I3C_IBI_INTR) {
 		if (!ctx->cfg->common_cfg.ibi.enable_ibi) {
-			LOG_ERR("IBI interrupt is not enabled!\n");
+			// printk("IBI interrupt is not enabled!\n");
 			return RTK_I3C_NOT_ENABLED;
 		}
-		LOG_DBG("Target %d issue ibi request!\n", ctx->cfg->common_cfg.instance_id);
+		// printk("Target %d issue ibi request!\n", ctx->cfg->common_cfg.instance_id);
 		addr = ctx->cfg->tagt_info.dyn_addr;
+		// printk("addr = %X", addr);
 		is_read = true;
 	} else if (ibi_type == RTK_I3C_IBI_CTRL_REQ) {
 		if (!ctx->cfg->common_cfg.ibi.enable_cr) {
@@ -1332,16 +1336,16 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 
 	ctx->state = STATE_TAGT_IBI;
 
-	LOG_DBG("Target %d ibi write %zu bytes (%s)\n", ctx->cfg->common_cfg.instance_id,
-		msg != NULL ? msg->len : 0,
-		msg != NULL && I3C_MSG_IS_DMA(msg->flags) ? "DMA" : "CPU");
+	// printk("Target %d ibi write %zu bytes (%s)\n", ctx->cfg->common_cfg.instance_id,
+		// msg != NULL ? msg->len : 0,
+		// msg != NULL && I3C_MSG_IS_DMA(msg->flags) ? "DMA" : "CPU");
 
 	if (ibi_type == RTK_I3C_IBI_INTR) {
 		msg->flags |= RTK_I3C_IBI;
 		xfer_buffer = rtk_i3c_set_buffer(ctx, msg);
 		if ((ret = rtk_i3c_write_data_frame(ctx, xfer_buffer->msg, false,
 						    RTK_I3C_SDR_MODE)) < 0) {
-			LOG_DBG("with %zu bytes\n", msg->len);
+			// printk("with %zu bytes\n", msg->len);
 			return ret;
 		}
 		xfer_buffer->msg.count = ret;
@@ -1473,13 +1477,17 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 		return;
 	}
 
+	// if(read_len > 69) {
+	// 	read_len = 69;
+	// }
+
 #ifdef CONFIG_RTK_I3C_TAGT
-	if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
-	    ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
-		LOG_WRN("Target RXNE ignored: state=%d rxfl=%u", ctx->state, read_len);
-		rtk_i3c_core_flush_rx(ctx->core);
-		return;
-	}
+	// if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
+	//     ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
+	// 	LOG_WRN("Target RXNE ignored: state=%d rxfl=%u\n", ctx->state, read_len);
+	// 	rtk_i3c_core_flush_rx(ctx->core);
+	// 	return;
+	// }
 #endif /* CONFIG_RTK_I3C_TAGT */
 
 #ifdef CONFIG_RTK_I3C_DMA

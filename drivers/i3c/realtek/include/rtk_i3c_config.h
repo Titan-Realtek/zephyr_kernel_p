@@ -56,6 +56,7 @@
  * @brief I3C open-drain baud rate configuration
  * @value Baud rate in Hz (0 to use default 2.5MHz)
  */
+//
 #define RTK_I3C_I3C_OD_BAUD_HZ 2500000U
 
 #ifndef CONFIG_RTK_I3C_CORE_LOG_LEVEL
