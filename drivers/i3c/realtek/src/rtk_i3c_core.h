@@ -1410,7 +1410,8 @@ static inline int rtk_i3c_core_wait_rx_fifo(rtk_i3c_core *core)
 static inline void rtk_i3c_core_write_fifo_byte(rtk_i3c_core *core, uint8_t data)
 {
 	rtk_core_write8(core->tbdfr, data);
-	LOG_REG("0x%02" PRIx8 "\n\n", data);
+	LOG_ERR("0x%02" PRIx8 "\n\n", data);
+	LOG_ERR("indicate: %X", (*(volatile uint32_t *)(0x40004000 + 0x2C)));
 }
 
 static inline void rtk_i3c_core_write_fifo_word(rtk_i3c_core *core, uint32_t data)

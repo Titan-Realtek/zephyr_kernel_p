@@ -28,14 +28,14 @@
 
 LOG_MODULE_REGISTER(i3c_realtek, CONFIG_I3C_REALTEK_LOG_LEVEL);
 
-#define I3C_REALTEK_ADDR_SLOT_BITS    32U
-#define I3C_REALTEK_ADDR_SLOT_WORDS   ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_ADDR_SLOT_BITS)
-#define I3C_REALTEK_MAX_DEVS          RTK_I3C_MAX_TAGT_COUNT
+#define I3C_REALTEK_ADDR_SLOT_BITS  32U
+#define I3C_REALTEK_ADDR_SLOT_WORDS ROUND_UP(RTK_I3C_MAX_DYN_ADDR + 1U, I3C_REALTEK_ADDR_SLOT_BITS)
+#define I3C_REALTEK_MAX_DEVS        RTK_I3C_MAX_TAGT_COUNT
 /* Internal RX staging buffer for controller-initiated writes to this target.
  * Sized to cover the largest validated private/legacy transfer (256 bytes).
  */
-#define I3C_REALTEK_RX_BUF_SIZE       256U
-#define I3C_REALTEK_IBI_TIMEOUT       K_MSEC(100)
+#define I3C_REALTEK_RX_BUF_SIZE     256U
+#define I3C_REALTEK_IBI_TIMEOUT     K_MSEC(100)
 /* When a target-raised IBI/HJ is rejected (NACKed) or loses arbitration, retry
  * a few times with a short backoff before giving up. Rejection is transient
  * (the controller may be busy), unlike a timeout (no active controller).
@@ -43,7 +43,7 @@ LOG_MODULE_REGISTER(i3c_realtek, CONFIG_I3C_REALTEK_LOG_LEVEL);
  * Hot Join gets its own, more persistent policy: joining the bus matters more,
  * and I3C requires a longer wait after a rejected hot join before retrying.
  */
-#define I3C_REALTEK_IBI_RETRY_MAX     3
+#define I3C_REALTEK_IBI_RETRY_MAX   3
 #define I3C_REALTEK_IBI_RETRY_BACKOFF K_MSEC(1)
 #define I3C_REALTEK_HJ_RETRY_MAX      5
 #define I3C_REALTEK_HJ_RETRY_BACKOFF  K_MSEC(10)
@@ -418,6 +418,7 @@ static void i3c_realtek_handle_daa_phase(const struct device *dev,
  */
 static void i3c_realtek_arm_rx(struct i3c_realtek_data *data)
 {
+	// LOG_ERR("i3c_realtek_arm_rx");
 	rtk_i3c_msg msg = {
 		.data = data->rx_buf,
 		.len = sizeof(data->rx_buf),
@@ -537,6 +538,8 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 					target_cb->write_requested_cb(data->target_config);
 				}
 				if (target_cb->write_received_cb != NULL) {
+					// LOG_ERR("args->count %d", args->count);
+					// args->count = 69;
 					for (uint32_t i = 0; i < args->count; i++) {
 						target_cb->write_received_cb(data->target_config,
 									     data->rx_buf[i]);
@@ -610,6 +613,17 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			}
 			data->hj_enabled_prev = hj_now;
 		}
+
+		/* A CCC from the controller (e.g. ENEC/DISEC to enable/disable
+		 * IBI) leaves the core in STATE_TAGT_IDLE. Restore the resting RX
+		 * arm so a following controller private write is accepted instead
+		 * of dropped ("Target RXNE ignored"); mirrors the re-arm done on
+		 * the other target completion events.
+		 */
+		if (data->target_config != NULL) {
+			i3c_realtek_arm_rx(data);
+		}
+
 		k_sem_give(&data->ccc_end);
 		break;
 	case RTK_I3C_EVENT_IBI_WRITE_COMPLETE:
@@ -702,6 +716,12 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 	struct i3c_config_controller *ctrl_cfg;
 	struct i3c_config_target *target_cfg;
 	int ret = 0;
+
+	// PLL = 125MHZ: REG_PLL_DIVN = 3
+	*(volatile uint32_t *)(0x40100120) &= ~(0xF << 2);
+	*(volatile uint32_t *)(0x40100120) |= (0x3 << 2);
+	// *(volatile uint32_t *)(0x40230000 + 4 * 96) |= (1 << 2) | (1 << 11);
+	// *(volatile uint32_t *)(0x40230000 + 4 * 97) |= (1 << 2) | (1 << 11);
 
 	if (bus_config == NULL) {
 		return -EINVAL;
@@ -969,16 +989,21 @@ static struct i3c_device_desc *i3c_realtek_device_find(const struct device *dev,
 static int i3c_realtek_ibi_raise_once(struct i3c_realtek_data *data, rtk_i3c_ibi_type ibi_type,
 				      rtk_i3c_msg *msg_ptr)
 {
+	// LOG_ERR("i3c_realtek_ibi_raise_once");
 	unsigned int key;
 	int ret;
 
 	k_sem_reset(&data->ibi_sem);
+	// LOG_ERR("k_sem_reset");
 	/* Atomic vs the completion ISR that arms RX (see i3c_realtek_arm_rx). Only
 	 * the state-mutating ibi_write is guarded; the wait below must not run with
 	 * interrupts locked.
 	 */
 	key = irq_lock();
-	ret = i3c_realtek_err_to_errno(rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr));
+	// LOG_ERR("irq_lock");
+	int eeeer = rtk_i3c_ibi_write(&data->rtk_ctx, ibi_type, msg_ptr);
+	// LOG_ERR("xxxxxxxxxxxx");
+	ret = i3c_realtek_err_to_errno(eeeer);
 	irq_unlock(key);
 	if (ret != 0) {
 		return ret;
@@ -997,6 +1022,8 @@ static int i3c_realtek_ibi_raise_once(struct i3c_realtek_data *data, rtk_i3c_ibi
 
 static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *request)
 {
+	// LOG_ERR("i3c_realtek_ibi_raise");
+	// LOG_ERR("request %08X", request);
 	struct i3c_realtek_data *data = dev->data;
 	rtk_i3c_msg msg = {0};
 	rtk_i3c_msg *msg_ptr = NULL;
@@ -1004,6 +1031,7 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 	int ret;
 
 	if (request == NULL) {
+		LOG_ERR("i3c_realtek_ibi_raise return 1");
 		return -EINVAL;
 	}
 
@@ -1018,6 +1046,7 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 		ibi_type = RTK_I3C_IBI_HOT_JOIN;
 		break;
 	default:
+		LOG_ERR("i3c_realtek_ibi_raise return 2");
 		return -EINVAL;
 	}
 
@@ -1025,6 +1054,7 @@ static int i3c_realtek_ibi_raise(const struct device *dev, struct i3c_ibi *reque
 	 * hot-join is raised precisely because there is none yet.
 	 */
 	if (ibi_type != RTK_I3C_IBI_HOT_JOIN && data->rtk_cfg.tagt_info.dyn_addr == 0U) {
+		LOG_ERR("i3c_realtek_ibi_raise return 3");
 		return -EINVAL;
 	}
 
@@ -1237,6 +1267,12 @@ static int i3c_realtek_init(const struct device *dev)
 	if (ret != 0) {
 		return ret;
 	}
+
+	// PLL = 125MHZ: REG_PLL_DIVN = 3
+	*(volatile uint32_t *)(0x40100120) &= ~(0xF << 2);
+	*(volatile uint32_t *)(0x40100120) |= (0x3 << 2);
+	// *(volatile uint32_t *)(0x40230180) |= (1 << 2) | (1 << 11);
+	// *(volatile uint32_t *)(0x40230184) |= (1 << 2) | (1 << 11);
 
 	if (!device_is_ready(config->clock_dev)) {
 		return -ENODEV;
