@@ -1236,12 +1236,18 @@ static int i3c_realtek_target_tx_write(const struct device *dev, uint8_t *buf, u
 	return ret == 0 ? (int)msg.count : ret;
 }
 
+/*
+ * Phase 1 — kernel-object / configuration init.
+ *
+ * Runs at POST_KERNEL via the Zephyr device model.  Initialises synchronisation
+ * primitives, stores the devicetree-derived configuration, and registers the
+ * instance in the lookup table.  Does NOT touch I3C hardware registers; that
+ * is deferred to i3c_realtek_hw_reinit() which requires the B_ON power rail.
+ */
 static int i3c_realtek_init(const struct device *dev)
 {
 	const struct i3c_realtek_config *config = dev->config;
 	struct i3c_realtek_data *data = dev->data;
-	int ret;
-
 	k_mutex_init(&data->bus_lock);
 	k_sem_init(&data->ccc_end, 0, 1);
 	k_sem_init(&data->xfer_end, 0, 1);
@@ -1263,6 +1269,35 @@ static int i3c_realtek_init(const struct device *dev)
 	data->rtk_cfg.common_cfg.ctx = dev;
 	data->rtk_cfg.tagt_table = data->tagt_table;
 	data->rtk_cfg.addr_slot = data->addr_slots;
+
+	return 0;
+}
+ 
+/**
+ * @brief Phase 2 — full I3C hardware initialisation.
+ *
+ * Must be called AFTER the B_ON power rail has been asserted
+ * (IO_SET_POutBOn).  This function performs:
+ *   - pin control (pinctrl_apply_state)
+ *   - clock enabling (clock_control_on)
+ *   - IRQ registration
+ *   - i3c_configure (controller or target, as configured)
+ *   - address slots initialisation
+ *   - bus init (RSTDAA / ENTDAA / ENEC)
+ *   - Hot-Join enable
+ *
+ * The function is idempotent with respect to Phase 1 — calling it multiple
+ * times re-programs the hardware registers but does not leak kernel objects.
+ *
+ * @param dev I3C device instance.
+ * @retval 0 on success.
+ * @retval negative errno on failure.
+ */
+int i3c_realtek_hw_reinit(const struct device *dev)
+{
+	const struct i3c_realtek_config *config = dev->config;
+	struct i3c_realtek_data *data = dev->data;
+	int ret;
 
 	ret = pinctrl_apply_state(config->pincfg, PINCTRL_STATE_DEFAULT);
 	if (ret != 0) {
