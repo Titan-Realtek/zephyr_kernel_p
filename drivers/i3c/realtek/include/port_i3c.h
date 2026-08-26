@@ -46,4 +46,16 @@ uintptr_t plat_i3c_get_base(uint8_t instance_id);
  */
 void plat_i3c_init_isr(rtk_i3c_ctx *ctx, uintptr_t vector);
 
+/**
+ * @brief Post-power-on I3C hardware initialisation
+ *
+ * Called from the middle layer (mdl_i3c_hub) AFTER B_ON has been asserted
+ * by IO_SET_POutBOn. Performs pinctrl, clock, IRQ, i3c_configure, bus init,
+ * DAA, and Hot-Join enable. Safe to call multiple times.
+ *
+ * @param dev I3C device instance
+ * @return 0 on success, negative errno on failure
+ */
+int i3c_realtek_hw_reinit(const struct device *dev);
+
 #endif
