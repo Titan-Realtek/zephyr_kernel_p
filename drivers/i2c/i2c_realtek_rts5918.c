@@ -67,7 +67,8 @@ static inline uint32_t get_regs(const struct device *dev)
 	return (uint32_t)DEVICE_MMIO_GET(dev);
 }
 
-#define APB_I2C_RESET (*(volatile uint32_t * const)(0x40010840UL))
+#define IP_I2C_RESET (*(volatile uint32_t *const)(0x40100068UL)) // bit 21
+#define APB_I2C_RESET (*(volatile uint32_t *const)(0x40100070UL)) // bit 20
 
 /* forward declaration */
 static int i2c_rts5918_initialize(const struct device *dev);
@@ -84,37 +85,49 @@ static int i2c_rts5918_reset_i2c(const struct device *dev)
 	/* retrieve the I2C channel */
 	switch(reg_base)
 	{
-		case 0x4000D000UL:
+		case 0x40250000UL:
 			channel = 0;
 			break;
-		case 0x4000D200UL:
+		case 0x40250200UL:
 			channel = 1;
 			break;
-		case 0x4000D400UL:
+		case 0x40250400UL:
 			channel = 2;
 			break;
-		case 0x4000D600UL:
+		case 0x40250600UL:
 			channel = 3;
 			break;
-		case 0x4000D800UL:
+		case 0x40250800UL:
 			channel = 4;
 			break;
-		case 0x4000DA00UL:
+		case 0x40250A00UL:
 			channel = 5;
 			break;
-		case 0x4000DC00UL:
+		case 0x40250C00UL:
 			channel = 6;
 			break;
-		case 0x4000DE00UL:
+		case 0x40250E00UL:
 			channel = 7;
+			break;
+		case 0x40251000UL:
+			channel = 8;
+			break;
+		case 0x40251200UL:
+			channel = 9;
+			break;
+		case 0x40251400UL:
+			channel = 10;
 			break;
 		default:
 			return -EINVAL;
 	}
 
 	/* system reset I2C module */
-	APB_I2C_RESET |= (1 << channel);
-	APB_I2C_RESET &= ~(1 << channel);
+	APB_I2C_RESET |= (1 << (20-channel));
+	APB_I2C_RESET &= ~(1 << (20-channel));
+	/* I2C IP reset */
+	IP_I2C_RESET |= (1 << (21-channel));
+	IP_I2C_RESET &= ~(1 << (21-channel));
 
 	/* reinitialize I2C module */
 	return i2c_rts5918_initialize(dev);
