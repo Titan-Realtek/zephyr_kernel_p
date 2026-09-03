@@ -23,6 +23,8 @@ if (CONFIG_REALTEK_RTS5918_IMG_HEADER)
         -p ${IMG_TOOL_DIR}/mldsa87.pub.bin
         -k SHA2_384
         -S MLDSA
+        -F ${CONFIG_REALTEK_RTS_IMG_HEADER_SPI_FREQ_MHZ}
+        -R ${CONFIG_REALTEK_RTS_IMG_HEADER_SPI_READ_CMD}
     )
     set(NEEDS_IMG_GEN TRUE)
 endif()
