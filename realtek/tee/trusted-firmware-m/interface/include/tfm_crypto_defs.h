@@ -62,6 +62,122 @@ struct tfm_crypto_pack_iovec {
     };
 };
 
+struct rtk_hash_compute_params {
+    uint8_t *sha_ctx;
+    const uint8_t *input;
+    size_t input_len;
+    uint8_t *hash;
+} __attribute__((aligned(4)));
+
+struct rtk_mac_compute_params {
+	const uint8_t *key;
+    size_t key_len;
+    const uint8_t *input;
+    size_t input_len;
+    uint8_t *hmac_hash;
+} __attribute__((aligned(4)));
+
+struct rtk_ecdsa_genkey_params {
+	uint8_t *pk;
+	uint8_t *sk;
+    uint8_t *seed;
+    size_t seed_len;
+} __attribute__((aligned(4)));
+
+struct rtk_ecdsa_sign_params {
+	const uint8_t *sk;
+	const uint8_t *hash;
+    size_t hash_len;
+    uint8_t *r_buf;
+    uint8_t *s_buf;
+} __attribute__((aligned(4)));
+
+struct rtk_ecdsa_verify_params {
+	const uint8_t *pk;
+	const uint8_t *hash;
+    size_t hash_len;
+    const uint8_t *sig;
+    size_t sig_len;
+} __attribute__((aligned(4)));
+
+struct rtk_ecdh_gen_shared_secret_params {
+	const uint8_t *pk;
+    const uint8_t *sk;
+	uint8_t *ss;
+} __attribute__((aligned(4)));
+
+struct rtk_aes_gcm_enc_params {
+    uint8_t *key;
+    size_t key_len;
+    uint8_t *iv;
+    size_t iv_len;
+    uint8_t *add;
+    size_t add_len;
+    uint8_t *input;
+    size_t input_len;
+    uint8_t *output;
+    uint8_t *tag;
+    size_t tag_len;
+} __attribute__((aligned(4)));
+
+struct rtk_aes_gcm_dec_params {
+    uint8_t *key;
+    size_t key_len;
+    uint8_t *iv;
+    size_t iv_len;
+    uint8_t *add;
+    size_t add_len;
+    uint8_t *input;
+    size_t input_len;
+    uint8_t *tag;
+    size_t tag_len;
+    uint8_t *output;
+} __attribute__((aligned(4)));
+
+struct rtk_mldsa_genkey_params {
+	uint8_t *pk;
+	uint8_t *sk;
+    uint8_t *seed;
+};
+
+struct rtk_mldsa_sign_params {
+    const uint8_t *msg;
+    size_t msg_len;
+    const uint8_t *ctx;
+    size_t ctx_len;
+    const uint8_t *sk;
+    const uint8_t *rnd;
+    uint8_t *sig;
+} __attribute__((aligned(4)));
+
+struct rtk_mldsa_verify_params {
+    uint8_t *sig;
+    const uint8_t *msg;
+    size_t msg_len;
+    const uint8_t *ctx;
+    size_t ctx_len;
+    const uint8_t *pk;
+} __attribute__((aligned(4)));
+
+struct rtk_kyber_genkey_params {
+    uint8_t *pk;
+	uint8_t *sk;
+    const uint8_t *coins;
+} __attribute__((aligned(4)));
+
+struct rtk_kyber_kem_enc_params {
+    const uint8_t *pk;
+    const uint8_t *coins;
+    uint8_t *ct;
+    uint8_t *ss;
+} __attribute__((aligned(4)));
+
+struct rtk_kyber_kem_dec_params {
+    const uint8_t *ct;
+    const uint8_t *sk;
+    uint8_t *ss;
+} __attribute__((aligned(4)));
+
 /**
  * \brief Type associated to the group of a function encoding. There can be
  *        nine groups (Random, Key management, Hash, MAC, Cipher, AEAD,
@@ -76,7 +192,8 @@ enum tfm_crypto_group_id_t {
     TFM_CRYPTO_GROUP_ID_AEAD            = UINT8_C(6),
     TFM_CRYPTO_GROUP_ID_ASYM_SIGN       = UINT8_C(7),
     TFM_CRYPTO_GROUP_ID_ASYM_ENCRYPT    = UINT8_C(8),
-    TFM_CRYPTO_GROUP_ID_KEY_DERIVATION  = UINT8_C(9)
+    TFM_CRYPTO_GROUP_ID_KEY_DERIVATION  = UINT8_C(9),
+    TFM_CRYPTO_GROUP_ID_RTK             = UINT8_C(10),
 };
 
 /* Set of X macros describing each of the available PSA Crypto APIs */
@@ -163,6 +280,29 @@ enum tfm_crypto_group_id_t {
     X(TFM_CRYPTO_KEY_DERIVATION_OUTPUT_KEY)        \
     X(TFM_CRYPTO_KEY_DERIVATION_ABORT)
 
+#define RTK_FUNCS                                  \
+	X(TFM_CRYPTO_RTK_CRYPTO_INIT)                  \
+    X(TFM_CRYPTO_RTK_HASH_COMPUTE)                 \
+    X(TFM_CRYPTO_RTK_HASH_ABORT)                   \
+    X(TFM_CRYPTO_RTK_HASH_SETUP)                   \
+    X(TFM_CRYPTO_RTK_HASH_UPDATE)                  \
+    X(TFM_CRYPTO_RTK_HASH_FINISH)                  \
+    X(TFM_CRYPTO_RTK_MAC_COMPUTE)                  \
+    X(TFM_CRYPTO_RTK_ECDSA_GENKEY)                 \
+    X(TFM_CRYPTO_RTK_ECDSA_SIGN)                   \
+    X(TFM_CRYPTO_RTK_ECDSA_VERIFY)                 \
+    X(TFM_CRYPTO_RTK_ECDSA_SIGN_RAW)               \
+    X(TFM_CRYPTO_RTK_ECDSA_VERIFY_RAW)             \
+    X(TFM_CRYPTO_RTK_ECDH_GEN_SHARED_SECRET)       \
+    X(TFM_CRYPTO_RTK_AES_GCM_ENCRYPT)              \
+    X(TFM_CRYPTO_RTK_AES_GCM_DECRYPT)              \
+    X(TFM_CRYPTO_RTK_MLDSA_GENKEY)                 \
+    X(TFM_CRYPTO_RTK_MLDSA_SIGN)                   \
+    X(TFM_CRYPTO_RTK_MLDSA_VERIFY)                 \
+    X(TFM_CRYPTO_RTK_KYBER_GENKEY)                 \
+    X(TFM_CRYPTO_RTK_KYBER_ENCRYPT)                \
+    X(TFM_CRYPTO_RTK_KYBER_DECRYPT)
+
 #define BASE__VALUE(x) ((uint16_t)((((uint16_t)(x)) << 8) & 0xFF00))
 
 /**
@@ -197,6 +337,9 @@ enum tfm_crypto_func_sid_t {
     ASYM_ENCRYPT_FUNCS
     BASE__KEY_DERIVATION = BASE__VALUE(TFM_CRYPTO_GROUP_ID_KEY_DERIVATION) - 1,
     KEY_DERIVATION_FUNCS
+
+    BASE__RTK = BASE__VALUE(TFM_CRYPTO_GROUP_ID_RTK) - 1,
+	RTK_FUNCS
 #undef X
 };
 

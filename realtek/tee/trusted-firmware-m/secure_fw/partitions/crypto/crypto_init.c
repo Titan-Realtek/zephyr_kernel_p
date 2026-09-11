@@ -387,6 +387,8 @@ psa_status_t tfm_crypto_api_dispatcher(psa_invec in_vec[],
                                                    &encoded_key);
     case TFM_CRYPTO_GROUP_ID_RANDOM:
         return tfm_crypto_random_interface(in_vec, out_vec);
+    case TFM_CRYPTO_GROUP_ID_RTK:
+        return tfm_crypto_rtk_interface(in_vec, out_vec);
     default:
         LOG_ERRFMT("[ERR][Crypto] Unsupported request!\r\n");
         return PSA_ERROR_NOT_SUPPORTED;

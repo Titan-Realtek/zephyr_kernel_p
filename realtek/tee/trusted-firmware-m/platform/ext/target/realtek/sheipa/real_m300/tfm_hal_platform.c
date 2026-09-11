@@ -56,6 +56,7 @@ static void rtk_lalu_bringup(void)
     *(volatile uint32_t *)(RTK_SYSTEM_LC) |= 0x60000000ul;
     *(volatile uint32_t *)(RTK_SYSTEM_REG_BASE) = 0xfffffffful;
     *(volatile uint32_t *)(RTK_SYSTEM_SYSCLKSEL) &= ~(0x3ul << 4);
+    *(volatile uint32_t *)(RTK_SYSTEM_SYSCLKSEL) |= (0x2ul << 4);
 
     /* IP clocks on (LALU bank 4; DMA+OTP bank 0). */
     *(volatile uint32_t *)(RTK_SYSTEM_IPCLK4) |= RTK_LALU_BIT;

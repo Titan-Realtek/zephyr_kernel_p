@@ -139,8 +139,9 @@ int32_t boot_platform_post_init(void)
     *(volatile uint32_t *)(RTK_SYSTEM_LC) |= 0x60000000ul;
     /* Enable the LALU engine. */
     *(volatile uint32_t *)(RTK_SYSTEM_REG_BASE) = 0xfffffffful;
-    /* Select LC as the LALU clock source. */
+    /* Select PLL as the LALU clock source. */
     *(volatile uint32_t *)(RTK_SYSTEM_SYSCLKSEL) &= ~(0x3ul << 4);
+    *(volatile uint32_t *)(RTK_SYSTEM_SYSCLKSEL) |= (0x2ul << 4);
     /* --- 1. IP clocks on (LALU on bank 4; DMA+OTP on bank 0). --- */
     *(volatile uint32_t *)(RTK_SYSTEM_IPCLK4) |= RTK_LALU_BIT;
     *(volatile uint32_t *)(RTK_SYSTEM_IPCLK0) |= RTK_DMA_OTP_BITS;

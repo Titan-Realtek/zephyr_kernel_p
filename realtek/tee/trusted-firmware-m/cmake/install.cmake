@@ -97,6 +97,8 @@ if (TFM_PARTITION_CRYPTO)
                         ${INTERFACE_INC_DIR}/psa/crypto_struct.h
                         ${INTERFACE_INC_DIR}/psa/crypto_types.h
                         ${INTERFACE_INC_DIR}/psa/crypto_values.h
+                        ${INTERFACE_INC_DIR}/psa/rtk_psa_crypto.h
+                        ${INTERFACE_INC_DIR}/psa/nsc_api_table.h
             DESTINATION ${INSTALL_INTERFACE_INC_DIR}/psa)
     install(FILES       ${INTERFACE_INC_DIR}/tfm_crypto_defs.h
             DESTINATION ${INSTALL_INTERFACE_INC_DIR})

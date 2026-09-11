@@ -162,5 +162,60 @@
         PSA_FUNCTION_NAME(psa_asymmetric_decrypt)
 #define psa_generate_key \
         PSA_FUNCTION_NAME(psa_generate_key)
-
+#define rtk_psa_crypto_init \
+        PSA_FUNCTION_NAME(rtk_psa_crypto_init)
+#define rtk_psa_hash_compute \
+        PSA_FUNCTION_NAME(rtk_psa_hash_compute)
+#define rtk_psa_hash_setup \
+        PSA_FUNCTION_NAME(rtk_psa_hash_setup)
+#define rtk_psa_hash_update \
+        PSA_FUNCTION_NAME(rtk_psa_hash_update)
+#define rtk_psa_hash_finish \
+        PSA_FUNCTION_NAME(rtk_psa_hash_finish)
+#define rtk_psa_hash_abort \
+        PSA_FUNCTION_NAME(rtk_psa_hash_abort)
+#define rtk_psa_mac_compute \
+        PSA_FUNCTION_NAME(rtk_psa_mac_compute)
+#define rtk_psa_crypto_init \
+        PSA_FUNCTION_NAME(rtk_psa_crypto_init)
+#define rtk_psa_hash_compute \
+        PSA_FUNCTION_NAME(rtk_psa_hash_compute)
+#define rtk_psa_hash_setup \
+        PSA_FUNCTION_NAME(rtk_psa_hash_setup)
+#define rtk_psa_hash_update \
+        PSA_FUNCTION_NAME(rtk_psa_hash_update)
+#define rtk_psa_hash_finish \
+        PSA_FUNCTION_NAME(rtk_psa_hash_finish)
+#define rtk_psa_hash_abort \
+        PSA_FUNCTION_NAME(rtk_psa_hash_abort)
+#define rtk_psa_mac_compute \
+        PSA_FUNCTION_NAME(rtk_psa_mac_compute)
+#define rtk_psa_ecdsa_genkey \
+        PSA_FUNCTION_NAME(rtk_psa_ecdsa_genkey)
+#define rtk_psa_ecdsa_sign \
+        PSA_FUNCTION_NAME(rtk_psa_ecdsa_sign)
+#define rtk_psa_ecdsa_verify \
+        PSA_FUNCTION_NAME(rtk_psa_ecdsa_verify)
+#define rtk_psa_ecdsa_sign_raw \
+        PSA_FUNCTION_NAME(rtk_psa_ecdsa_sign_raw)
+#define rtk_psa_ecdsa_verify_raw \
+        PSA_FUNCTION_NAME(rtk_psa_ecdsa_verify_raw)
+#define rtk_psa_ecdh_gen_shared_secret \
+        PSA_FUNCTION_NAME(rtk_psa_ecdh_gen_shared_secret)
+#define rtk_psa_aes_gcm_encrypt \
+        PSA_FUNCTION_NAME(rtk_psa_aes_gcm_encrypt)
+#define rtk_psa_aes_gcm_decrypt \
+        PSA_FUNCTION_NAME(rtk_psa_aes_gcm_decrypt)
+#define rtk_psa_mldsa_genkey \
+        PSA_FUNCTION_NAME(rtk_psa_mldsa_genkey)
+#define rtk_psa_mldsa_sign \
+        PSA_FUNCTION_NAME(rtk_psa_mldsa_sign)
+#define rtk_psa_mldsa_verify \
+        PSA_FUNCTION_NAME(rtk_psa_mldsa_verify)
+#define rtk_psa_kyber_genkey \
+        PSA_FUNCTION_NAME(rtk_psa_kyber_genkey)
+#define rtk_psa_kyber_kem_enc\
+        PSA_FUNCTION_NAME(rtk_psa_kyber_kem_enc)
+#define rtk_psa_kyber_kem_dec \
+        PSA_FUNCTION_NAME(rtk_psa_kyber_kem_dec)
 #endif /* CRYPTO_SPE_H */

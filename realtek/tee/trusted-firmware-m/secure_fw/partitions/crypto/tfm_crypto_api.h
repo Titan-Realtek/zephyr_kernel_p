@@ -216,7 +216,16 @@ psa_status_t tfm_crypto_random_interface(psa_invec in_vec[],
  */
 psa_status_t tfm_crypto_hash_interface(psa_invec in_vec[],
                                        psa_outvec out_vec[]);
-
+/**
+ * \brief This function acts as interface for the RTK module
+ *
+ * \param[in]  in_vec   Array of invec parameters
+ * \param[out] out_vec  Array of outvec parameters
+ *
+ * \return Return values as described in \ref psa_status_t
+ */
+psa_status_t tfm_crypto_rtk_interface(psa_invec in_vec[],
+                                       psa_outvec out_vec[]);
 #ifdef __cplusplus
 }
 #endif
