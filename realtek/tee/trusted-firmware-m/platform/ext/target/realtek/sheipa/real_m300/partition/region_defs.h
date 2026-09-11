@@ -19,6 +19,9 @@
 
 #include "flash_layout.h"
 
+#define S_IMAGE_LOAD_ADDRESS    (0x2000B000)
+#define NS_IMAGE_LOAD_ADDRESS   (0x20038000)
+
 #define BL2_HEAP_SIZE           (0x00001000)
 #define BL2_MSP_STACK_SIZE      (0x00001800)
 
@@ -135,7 +138,7 @@
 #define DEV_APIS_TEST_NVMEM_REGION_SIZE  0x400
 #define NS_DATA_SIZE    (0x1B000 - DEV_APIS_TEST_NVMEM_REGION_SIZE)
 #else
-#define NS_DATA_SIZE    (0x1A000)     /* 104 KB (was 0x1B000; 1K reclaimed for BL2 growth) */
+#define NS_DATA_SIZE    (0x40000)     /* 104 KB (was 0x1B000; 1K reclaimed for BL2 growth) */
 #endif
 #define NS_DATA_LIMIT   (NS_DATA_START + NS_DATA_SIZE - 1)
 

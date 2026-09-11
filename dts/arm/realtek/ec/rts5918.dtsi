@@ -62,7 +62,7 @@
 
 	sram0: memory@200b5020 {
 		compatible = "mmio-sram";
-		reg = <0x200B5020 0x1A000>;
+		reg = <0x200B5020 0x40000>;
 	};
 
 	clocks {
