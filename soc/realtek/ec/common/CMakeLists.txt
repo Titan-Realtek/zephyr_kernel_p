@@ -38,6 +38,14 @@ if (NEEDS_IMG_GEN)
         ${PROJECT_BINARY_DIR}/${RTS_PAD_BIN_NAME}
     COMMAND ${PYTHON_EXECUTABLE} ${IMG_TOOL_DIR}/image_parser.py
         ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME} > ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}.info
+      
+        COMMAND ${CMAKE_OBJCOPY} -I binary -O binary
+            --gap-fill 0xFF --pad-to 0x80000
+            ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}
+            ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}.padtmp
+        COMMAND ${CMAKE_COMMAND} -E rename
+            ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}.padtmp
+            ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}
     )
 
 endif()
