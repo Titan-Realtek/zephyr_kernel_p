@@ -123,6 +123,8 @@ static int ps2_rts5918_write(const struct device *dev, uint8_t value)
 	regs->STS |= 0xff;
 	/* Enable Start Of Transaction interrupt */
 	regs->INTEN |= BIT(PS2_INTEN_STRINTEN_Pos);
+	/* Inhibit communication should last at least 100 micro-seconds */
+	k_busy_wait(100);
     /* set Tx data */
     regs->TXDAT = value & PS2_TXDAT_DATA_Msk;
 	temp_cnt = 1;
@@ -184,12 +186,12 @@ static int ps2_rts5918_enable_interface(const struct device *dev)
 		return -EACCES;
 	}
 
-	/* set to default pin configure */
-	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	/* Clear status bits */
     regs->STS |= 0xFF;
 	/* Enable PS2 */
     regs->CTRL |= (1U << PS2_CTRL_EN_Pos);
+	/* set to default pin configure */
+	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 
 	k_sem_give(&data->lock);
 
@@ -273,6 +275,10 @@ static void ps2_rts5918_isr(const struct device *dev)
 		// if (IS_BIT_SET(regs->CTRL, PS2_CTRL_MDSEL_Pos)) {
 			/* Change the PS/2 module to receive mode */
 			// regs->CTRL &= ~BIT(PS2_CTRL_MDSEL_Pos);
+// #ifdef CONFIG_PS2_REALTEK_FW_INHIBIT
+// 			/* set clock low to prevent device send next byte */
+// 			GPIO_PS2_CLK = GPIO_OUTPUT_L;
+// #endif
 			temp_cnt = 0;
 			k_sem_give(&data->tx_sync_sem);
 		} else {
