@@ -25,3 +25,7 @@ config PS2_REALTEK_CLK_PIN
 	int "Clock Pin number"
 	default 68
 
+config PS2_REALTEK_DATA_PIN
+	int "Data Pin number"
+	default 72
+
