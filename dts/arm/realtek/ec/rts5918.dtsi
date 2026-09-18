@@ -540,7 +540,7 @@
 		ps2_1: ps2@40254300 {
 			compatible = "realtek,rts5918-ps2";
 			reg = <0x40254300 0x14>;
-			interrupts = <76 1>;
+			interrupts = <76 0>;
 			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_1_PWR>,
 						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_1_PWR>;
 			clock-names = "ps2","ps2_32k";
@@ -551,7 +551,7 @@
 		ps2_2: ps2@40254400 {
 			compatible = "realtek,rts5918-ps2";
 			reg = <0x40254400 0x14>;
-			interrupts = <77 1>;
+			interrupts = <77 0>;
 			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_2_PWR>,
 						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_2_PWR>;
 			clock-names = "ps2","ps2_32k";
@@ -562,7 +562,7 @@
 		ps2_3: ps2@40255700 {
 			compatible = "realtek,rts5918-ps2";
 			reg = <0x40255700 0x14>;
-			interrupts = <78 1>;
+			interrupts = <78 0>;
 			clocks =	<&sccon RTS5918_CLK_RC25M RTS5918_PS2_1M_3_PWR>,
 						<&sccon RTS5918_CLK_PS2_32K RTS5918_PS2_32K_3_PWR>;
 			clock-names = "ps2","ps2_32k";
