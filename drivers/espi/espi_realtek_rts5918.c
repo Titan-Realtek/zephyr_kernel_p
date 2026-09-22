@@ -1133,8 +1133,17 @@ uint32_t g_mailbox_buffer[256];
 #define MBX_MAILBOX_REGISTER_30 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x88))) //MBI_GPD30
 #define MBX_MAILBOX_REGISTER_31 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x8C))) //MBI_GPD31
 
+struct data_item1_t {
+	const struct device *dev;
+};
+#define MSGQ_MAX_MSGS 10
+#define MSG_SIZE1 sizeof(struct data_item1_t)
+K_MSGQ_DEFINE(response_rx_msgq, MSG_SIZE1, MSGQ_MAX_MSGS, 4);
+static struct data_item1_t response_rx_data;
+
 static void espi_periph_ch_isr(const struct device *dev)
 {
+	int ret = 0;
 	const struct espi_rts5918_config *const espi_config = dev->config;
 	struct espi_rts5918_data *data = dev->data;
 
@@ -1244,10 +1253,19 @@ static void espi_periph_ch_isr(const struct device *dev)
 				espi_reg->IOSHORTRDDATA = value << 8;
 			}
 		}
-		int key = irq_lock();
-		espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
-		espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
-		irq_unlock(key);
+		if (io_address == 0x1610 || io_address == 0x1611) {
+			response_rx_data.dev = dev;
+			ret = k_msgq_put(&response_rx_msgq, &response_rx_data, K_NO_WAIT);
+			if (ret != 0) {
+				LOG_ERR("Response buffer full!");
+			}
+		}
+		else {
+			int key = irq_lock();
+			espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
+			espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
+			irq_unlock(key);
+		}
 	}
 #endif
 	else {
@@ -3493,7 +3511,39 @@ void taf_rx_thread(void)
 	}
 }
 
+void response_tx_thread(void)
+{
+	int ret;
+	while(1)
+	{
+		LOG_INF("io short_msg queue!!!!");
+        ret = k_msgq_get(&response_rx_msgq, &response_rx_data, K_FOREVER);
+		if(ret == 0) {
+			LOG_INF("start run response_tx_thread \n\r");
+			const struct espi_rts5918_config *const espi_config = response_rx_data.dev->config;
+			volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
+
+			while(1){
+				//check it eSPI CS pin is high and saf done bit is set, then send response to host
+				if (((*((uint32_t * volatile)0x40100834) & BIT(4)) != 0U) &&((espi_reg->EOSTS & BIT(3)) != 0U)) {
+					int key = irq_lock();
+					espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
+					espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
+					irq_unlock(key);
+					break;
+				}
+				k_usleep(100);	// wait 100us
+			}
+
+
+		}
+	}
+}
+
 K_THREAD_DEFINE(taf_rx_tid, 1024, taf_rx_thread, NULL, NULL, NULL,
+                0, 0, 0);
+
+K_THREAD_DEFINE(response_tx_tid, 1024, response_tx_thread, NULL, NULL, NULL,
                 0, 0, 0);
 
 PINCTRL_DT_INST_DEFINE(0);
