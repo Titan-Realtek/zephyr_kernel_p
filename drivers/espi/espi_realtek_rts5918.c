@@ -1254,10 +1254,18 @@ static void espi_periph_ch_isr(const struct device *dev)
 			}
 		}
 		if (io_address == 0x1610 || io_address == 0x1611) {
-			response_rx_data.dev = dev;
-			ret = k_msgq_put(&response_rx_msgq, &response_rx_data, K_NO_WAIT);
-			if (ret != 0) {
-				LOG_ERR("Response buffer full!");
+			if ((*((uint32_t * volatile)0x40100834) & BIT(4)) && (espi_reg->EFSTS & BIT(3))) {
+				int key = irq_lock();
+				espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
+				espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
+				irq_unlock(key);
+			}
+			else {
+				response_rx_data.dev = dev;
+				while(k_msgq_put(&response_rx_msgq, &response_rx_data, K_NO_WAIT) != 0)
+				{
+					k_msgq_purge(&response_rx_msgq);
+				}
 			}
 		}
 		else {
@@ -3516,26 +3524,22 @@ void response_tx_thread(void)
 	int ret;
 	while(1)
 	{
-		LOG_INF("io short_msg queue!!!!");
         ret = k_msgq_get(&response_rx_msgq, &response_rx_data, K_FOREVER);
+
 		if(ret == 0) {
-			LOG_INF("start run response_tx_thread \n\r");
 			const struct espi_rts5918_config *const espi_config = response_rx_data.dev->config;
 			volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
 
-			while(1){
-				//check it eSPI CS pin is high and saf done bit is set, then send response to host
-				if (((*((uint32_t * volatile)0x40100834) & BIT(4)) != 0U) &&((espi_reg->EOSTS & BIT(3)) != 0U)) {
+			//check it eSPI CS pin is high and saf done bit is set, then send response to host
+			while(1) {
+				if ((*((uint32_t * volatile)0x40100834) & BIT(4)) && (espi_reg->EFSTS & BIT(3))) {
 					int key = irq_lock();
 					espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
 					espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
 					irq_unlock(key);
 					break;
 				}
-				k_usleep(100);	// wait 100us
 			}
-
-
 		}
 	}
 }
