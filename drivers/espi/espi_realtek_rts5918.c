@@ -3532,7 +3532,9 @@ void response_tx_thread(void)
 
 			//check it eSPI CS pin is high and saf done bit is set, then send response to host
 			while(1) {
-				if ((*((uint32_t * volatile)0x40100834) & BIT(4)) && (espi_reg->EFSTS & BIT(3))) {
+				volatile uint32_t padval = *(volatile uint32_t *)0x40100834;
+				volatile uint32_t efsts = espi_reg->EFSTS;
+				if ((padval & BIT(4)) && (efsts & BIT(3))) {
 					int key = irq_lock();
 					espi_reg->EPSTS = ESPI_EPSTS_WR_HOLE;
 					espi_reg->IOSHORTSTS |= ESPI_IOSHORTSTS_RSPSTART | ESPI_IOSHORTSTS_ACCEPT;
