@@ -890,6 +890,7 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_WDT_PWR:
 					sys_reg->APBCLK2 |= SYSTEM_APBCLK2__WDT_Msk;
+					sys_reg->VBATIPCLK |= SYSTEM_VBATIPCLK__WDTPWR_Msk;
 					break;
 				case RTS5918_TRC_PWR:
 					sys_reg->APBCLK2 |= SYSTEM_APBCLK2__TRC_Msk;
@@ -914,6 +915,7 @@ static int rts5918_periph_clock_control(const struct device *dev, clock_control_
 					break;
 				case RTS5918_WDT_PWR:
 					sys_reg->APBCLK2 &= ~SYSTEM_APBCLK2__WDT_Msk;
+					sys_reg->VBATIPCLK &= ~SYSTEM_VBATIPCLK__WDTPWR_Msk;
 					break;
 				case RTS5918_TRC_PWR:
 					sys_reg->APBCLK2 &= ~SYSTEM_APBCLK2__TRC_Msk;
