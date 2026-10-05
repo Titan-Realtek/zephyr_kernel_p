@@ -14,10 +14,26 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(rts5918_bbram, CONFIG_BBRAM_LOG_LEVEL);
 
+#include "Jupiter/smc_rts5918/smc_vbat_ram.h"
+
 struct bbram_rts5918_config {
 	uintptr_t base;
 	int size;
 };
+
+static int bbram_rts5918_por(const struct device *dev)
+{
+	const struct bbram_rts5918_config *config = dev->config;
+	volatile uint32_t *por_token = (volatile uint32_t *)(config->base + VBAT_RAM_POR_TOKEN_0);
+
+	if(*por_token != VBAT_RAM_POR_TOKEN_VAL) {
+		memset((void *)config->base, 0, config->size);
+		*por_token = VBAT_RAM_POR_TOKEN_VAL;
+		return 0;
+	}
+
+	return -EPERM;
+}
 
 static int bbram_rts5918_get_size(const struct device *dev, size_t *size)
 {
@@ -93,7 +109,7 @@ static const struct bbram_driver_api bbram_rts5918_driver_api = {
 		.base = DT_INST_REG_ADDR(inst),                                                    \
 		.size = DT_INST_REG_SIZE(inst),                                                    \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, NULL, &bbram_cfg_##inst, PRE_KERNEL_1,             \
+	DEVICE_DT_INST_DEFINE(inst, &bbram_rts5918_por, NULL, NULL, &bbram_cfg_##inst, PRE_KERNEL_1,             \
 			      CONFIG_BBRAM_INIT_PRIORITY, &bbram_rts5918_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BBRAM_INIT);

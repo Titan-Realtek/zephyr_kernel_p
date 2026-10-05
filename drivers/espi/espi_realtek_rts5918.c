@@ -3105,23 +3105,6 @@ static void espi_mbox_isr(const struct device *dev)
 #define SYSTEM_LDO2_WRITE (*(volatile uint32_t *)(SYSTEM_MMAP + 0x114ul))
 #define SYSTEM_VINOUT_CTRL (*(volatile uint32_t *)(SYSTEM_MMAP + 0x10Cul))
 
-static void init_bsram ()
-{
-	/* Check first-time system booting */
-	if(SYSTEM_VINOUT_MONITOR_VIVOLOG == 0)
-	{
-		/* Set bsram all zero */
-		memset((void *)0x20200000, 0, 256);
-
-		/* Enable VIVOLOG */
-		SYSTEM_LDO2_WRITE = 0x2;
-		SYSTEM_VINOUT_MONITOR |= (1 << 27);
-		SYSTEM_LDO2_WRITE = 0;
-	}
-
-	SYSTEM_VINOUT_CTRL |= (0x1 << 31);
-}
-
 static int espi_mabox_setup(const struct device *dev)
 {
 	const struct espi_rts5918_config *const espi_config = dev->config;
@@ -3135,9 +3118,6 @@ static int espi_mabox_setup(const struct device *dev)
 	DEVICE_DT_GET(DT_DRV_INST(0)), 0);
 	irq_enable(DT_IRQ_BY_NAME(DT_DRV_INST(0), mbx, irq));
 	LOG_ERR("MBOX end!!!");
-
-
-	init_bsram();
 
 	return 0;
 }
@@ -3492,7 +3472,7 @@ void taf_rx_thread(void)
 		LOG_INF("get taf_msg queue!!!!");
         ret = k_msgq_get(&taf_rx_msgq, &taf_rx_data, K_FOREVER);
 		if(ret == 0) {
-			LOG_INF("start run taf_rx_thread thread\n\r");
+			LOG_INF("start run taf_rx_thread thread");
 			const struct espi_rts5918_config *const espi_config = taf_rx_data.dev->config;
 			volatile struct espi_reg *const espi_reg = espi_config->espi_reg;
 			safs_flash_addr1 = taf_rx_data.addr;
