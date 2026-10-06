@@ -8,6 +8,7 @@
 
 #include <soc.h>
 #include <errno.h>
+#include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -113,15 +114,9 @@ static int pwm_rts5918_init(const struct device *dev)
 	const struct pwm_rts5918_config *const pwm_config = dev->config;
 	volatile struct pwm_regs *pwm_regs = pwm_config->pwm_regs;
 	struct rts5918_sccon_subsys sccon;
+	int count, count1;
 
 	int rc = 0;
-#ifdef CONFIG_PINCTRL
-	rc = pinctrl_apply_state(pwm_config->pcfg, PINCTRL_STATE_DEFAULT);
-	if (rc < 0) {
-		LOG_ERR("PWM pinctrl setup failed (%d)", rc);
-		return rc;
-	}
-#endif
 #ifdef CONFIG_CLOCK_CONTROL
 	if (!device_is_ready(pwm_config->clk_dev)) {
 		return -ENODEV;
@@ -147,7 +142,16 @@ static int pwm_rts5918_init(const struct device *dev)
 		} else {
 			pwm_regs->ctrl |= PWM_CTRL_INVT;
 		}
+		/* wait for 1ms to make sure the PWM output is stable before the next operation */
+		k_busy_wait(1000);
 	}
+#ifdef CONFIG_PINCTRL
+	rc = pinctrl_apply_state(pwm_config->pcfg, PINCTRL_STATE_DEFAULT);
+	if (rc < 0) {
+		LOG_ERR("PWM pinctrl setup failed (%d)", rc);
+		return rc;
+	}
+#endif
 	return rc;
 }
 
