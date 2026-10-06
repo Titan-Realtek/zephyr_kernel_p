@@ -1474,12 +1474,12 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	}
 
 #ifdef CONFIG_RTK_I3C_TAGT
-	if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
-	    ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
-		LOG_WRN("Target RXNE ignored: state=%d rxfl=%u", ctx->state, read_len);
-		rtk_i3c_core_flush_rx(ctx->core);
-		return;
-	}
+	// if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
+	//     ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
+	// 	LOG_WRN("Target RXNE ignored: state=%d rxfl=%u\n", ctx->state, read_len);
+	// 	rtk_i3c_core_flush_rx(ctx->core);
+	// 	return;
+	// }
 #endif /* CONFIG_RTK_I3C_TAGT */
 
 #ifdef CONFIG_RTK_I3C_DMA
