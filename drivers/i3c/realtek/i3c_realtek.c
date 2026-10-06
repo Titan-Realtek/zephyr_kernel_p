@@ -610,6 +610,17 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			}
 			data->hj_enabled_prev = hj_now;
 		}
+
+		/* A CCC from the controller (e.g. ENEC/DISEC to enable/disable
+		 * IBI) leaves the core in STATE_TAGT_IDLE. Restore the resting RX
+		 * arm so a following controller private write is accepted instead
+		 * of dropped ("Target RXNE ignored"); mirrors the re-arm done on
+		 * the other target completion events.
+		 */
+		if (data->target_config != NULL) {
+			i3c_realtek_arm_rx(data);
+		}
+
 		k_sem_give(&data->ccc_end);
 		break;
 	case RTK_I3C_EVENT_IBI_WRITE_COMPLETE:
@@ -702,6 +713,10 @@ static int i3c_realtek_configure(const struct device *dev, enum i3c_config_type 
 	struct i3c_config_controller *ctrl_cfg;
 	struct i3c_config_target *target_cfg;
 	int ret = 0;
+
+	// PLL = 125MHZ: REG_PLL_DIVN = 3
+	*(volatile uint32_t *)(0x40100120) &= ~(0xF << 2);
+	*(volatile uint32_t *)(0x40100120) |= (0x3 << 2);
 
 	if (bus_config == NULL) {
 		return -EINVAL;
@@ -1237,6 +1252,10 @@ static int i3c_realtek_init(const struct device *dev)
 	if (ret != 0) {
 		return ret;
 	}
+
+	// PLL = 125MHZ: REG_PLL_DIVN = 3
+	*(volatile uint32_t *)(0x40100120) &= ~(0xF << 2);
+	*(volatile uint32_t *)(0x40100120) |= (0x3 << 2);
 
 	if (!device_is_ready(config->clock_dev)) {
 		return -ENODEV;
