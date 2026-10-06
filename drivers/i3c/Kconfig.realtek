@@ -51,7 +51,7 @@ config RTK_I3C_CORE_LOG_LEVEL
 	int "RTK I3C core log level"
 	range 0 5
 	depends on RTK_I3C_CORE_LOG
-	default 3
+	default 0
 	help
 	  0: off, 1: error, 2: warning, 3: info, 4: debug, 5: register.
 
