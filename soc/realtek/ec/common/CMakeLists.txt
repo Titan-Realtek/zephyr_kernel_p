@@ -19,12 +19,17 @@ if (CONFIG_REALTEK_RTS5918_IMG_HEADER)
         -O ${PROJECT_BINARY_DIR}/${RTS_BIN_NAME}
         -L ${CONFIG_REALTEK_RTS_IMG_HEADER_LOAD_ADDRESS}
         -H SHA3_512
+        -DH SHA2_384
         -s ${IMG_TOOL_DIR}/mldsa87.pri.bin
         -p ${IMG_TOOL_DIR}/mldsa87.pub.bin
+        -Ds ${IMG_TOOL_DIR}/sk.bin
+        -Dp ${IMG_TOOL_DIR}/pk.bin
         -k SHA2_384
+        -Dk SHA2_384
         -S MLDSA
         -F ${CONFIG_REALTEK_RTS_IMG_HEADER_SPI_FREQ_MHZ}
         -R ${CONFIG_REALTEK_RTS_IMG_HEADER_SPI_READ_CMD}
+        -D
     )
     set(NEEDS_IMG_GEN TRUE)
 endif()
