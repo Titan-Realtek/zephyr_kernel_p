@@ -1243,6 +1243,9 @@ static void espi_periph_ch_isr(const struct device *dev)
 					case 0x0:
 						value = MBX_HOST_TO_EC_MAILBOX_REGISTER;
 						break;
+					case 0x1:
+						value = MBX_EC_TO_HOST_MAILBOX_REGISTER;   
+						break;
 					default:
 						if(g_mailbox_index >= 0x10) {
 							value = g_mailbox_buffer[4 + (g_mailbox_index - 0x10)];
