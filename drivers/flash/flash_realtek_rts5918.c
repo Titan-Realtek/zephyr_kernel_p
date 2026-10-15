@@ -1689,8 +1689,8 @@ static int flash_rts5918_init(const struct device *dev)
 	spic_reg->CTRL0 = ((spic_reg->CTRL0 & SPIC_CTRL0_CK_MTIMES_Msk) | CMD_CH(0) | DATA_CH(0) |
 			   ADDR_CH(0) | MODE(0) | ((spic_reg->CTRL0 & SPIC_CTRL0_SIPOL_Msk)));
 
-	spic_reg->BAUDR = 1UL;
-	spic_reg->FBAUD = 1UL;
+	spic_reg->BAUDR = 2UL;
+	spic_reg->FBAUD = 2UL;
 
 	k_sem_init(&data->sem, 1, 1);
 
