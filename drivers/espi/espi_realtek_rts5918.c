@@ -1243,6 +1243,9 @@ static void espi_periph_ch_isr(const struct device *dev)
 					case 0x0:
 						value = MBX_HOST_TO_EC_MAILBOX_REGISTER;
 						break;
+					case 0x1:
+						value = MBX_EC_TO_HOST_MAILBOX_REGISTER;
+						break;
 					default:
 						if(g_mailbox_index >= 0x10) {
 							value = g_mailbox_buffer[4 + (g_mailbox_index - 0x10)];
@@ -3355,6 +3358,8 @@ static int espi_rts5918_init(const struct device *dev)
 		LOG_ERR("eSPI clock control on failed");
 		goto exit;
 	}
+
+	*((volatile uint32_t *)0x40100020) |= BIT(22);	// Set eSPI clock divider to 2
 
 	/* Setup eSPI bus reset */
 	espi_bus_reset_setup(dev);
