@@ -3359,7 +3359,12 @@ static int espi_rts5918_init(const struct device *dev)
 		goto exit;
 	}
 
-	*((volatile uint32_t *)0x40100020) |= BIT(22);	// Set eSPI clock divider to 2
+	// *((volatile uint32_t *)0x40100020) |= BIT(22);	// Set eSPI clock divider to 2
+	*((volatile uint32_t *)0x40100820) = 0x3;
+	*((volatile uint32_t *)0x40100824) = 0x3;
+	*((volatile uint32_t *)0x40100828) = 0x3;
+	*((volatile uint32_t *)0x4010082c) = 0x3;
+	*((volatile uint32_t *)0x40100830) = 0x3;
 
 	/* Setup eSPI bus reset */
 	espi_bus_reset_setup(dev);
