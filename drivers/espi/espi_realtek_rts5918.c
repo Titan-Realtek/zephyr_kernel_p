@@ -2264,10 +2264,6 @@ static int espi_rts5918_send_vwire(const struct device *dev, enum espi_vwire_sig
 	}
 
 	espi_reg->EVTXDAT = tx_data;
-	k_busy_wait(10);
-	while (!(espi_reg->EVSTS & ESPI_EVSTS_TXEMPTY) && rd_cnt--) {
-		// k_busy_wait(10);
-	}
 
 	switch (vw_idx) {
 	case VW_CH_IDX4:
@@ -2518,25 +2514,8 @@ static int espi_send_vw_event(uint8_t index, uint8_t data, const struct device *
 		return -EBUSY;
 	}
 
-	/* Wait for TX FIFO to not be full before writing, with timeout */
-	while (espi_reg->EVSTS & ESPI_EVSTS_TXFULL) {
-		timeout_cnt++;
-		if (timeout_cnt >= ESPI_VW_EVENT_COMPLETE_TIMEOUT_US) {
-			return -EBUSY;
-		}
-	}
-
-	__disable_irq();
 	i = 0x0000FFFF & ((uint32_t)index << 8 | (uint32_t)data);
 	espi_reg->EVTXDAT = i;
-	k_busy_wait(10);
-	/* Wait for TX FIFO to not be full after writing, with shorter timeout */
-	while (!(espi_reg->EVSTS & ESPI_EVSTS_TXEMPTY) && --retry_counter) {
-		// k_busy_wait(10);
-	}
-
-	espi_reg->EVSTS |= ESPI_EVSTS_TXDONE;
-	__enable_irq();
 
 	return 0;
 }
@@ -2554,33 +2533,9 @@ static void espi_send_vw_event_with_kbdata(uint8_t index, uint8_t data, uint32_t
 		return;
 	}
 
-	/* Wait for TX FIFO to not be full before writing, with timeout */
-	while (espi_reg->EVSTS & ESPI_EVSTS_TXFULL) {
-		timeout_cnt++;
-		if (timeout_cnt >= ESPI_VW_EVENT_COMPLETE_TIMEOUT_US) {
-			return;
-		}
-	}
-
-	__disable_irq();
 	kbc_reg->OB = (uint32_t)kbc_data & 0xff;
 	i = 0x0000FFFF & ((uint32_t)index << 8 | (uint32_t)data);
 	espi_reg->EVTXDAT = i;
-	k_busy_wait(10);
-	/* Wait for TX FIFO to not be full after writing, in IRQ disabled state */
-	timeout_cnt = 0;
-	while (!(espi_reg->EVSTS & ESPI_EVSTS_TXEMPTY)) {
-		timeout_cnt++;
-		if (timeout_cnt >= ESPI_VW_EVENT_COMPLETE_TIMEOUT_US) {
-			// espi_data->kbc_pre_irq1 = 1;
-			__enable_irq();
-			return;
-		}
-	}
-
-	//espi_data->kbc_pre_irq1 = 1;
-	espi_reg->EVSTS |= ESPI_EVSTS_TXDONE;
-	__enable_irq();
 }
 
 #endif /* CONFIG_ESPI_PERIPHERAL_8042_KBC */
