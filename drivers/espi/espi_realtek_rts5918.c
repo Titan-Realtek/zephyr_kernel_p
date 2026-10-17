@@ -3315,7 +3315,7 @@ static int espi_rts5918_init(const struct device *dev)
 	}
 
 	// *((volatile uint32_t *)0x40100020) |= BIT(22);	// Set eSPI clock divider to 2
-	*((volatile uint32_t *)0x40100820) = 0x2B; // clk  : scheitter / pulldowwn / driving 12mA / input_detect
+	*((volatile uint32_t *)0x40100820) = 0x23; // clk  : scheitter / driving 12mA / input_detect
 	*((volatile uint32_t *)0x40100824) = 0x23; // IO-0 : scheitter / driving 12mA / input_detect
 	*((volatile uint32_t *)0x40100828) = 0x23; // IO-1 : scheitter / driving 12mA / input_detect
 	*((volatile uint32_t *)0x4010082c) = 0x23; // IO-2 : scheitter / driving 12mA / input_detect
