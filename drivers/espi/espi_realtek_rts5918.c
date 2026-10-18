@@ -3315,11 +3315,13 @@ static int espi_rts5918_init(const struct device *dev)
 	}
 
 	// *((volatile uint32_t *)0x40100020) |= BIT(22);	// Set eSPI clock divider to 2
-	*((volatile uint32_t *)0x40100820) = 0x23; // clk  : scheitter / driving 12mA / input_detect
-	*((volatile uint32_t *)0x40100824) = 0x23; // IO-0 : scheitter / driving 12mA / input_detect
-	*((volatile uint32_t *)0x40100828) = 0x23; // IO-1 : scheitter / driving 12mA / input_detect
-	*((volatile uint32_t *)0x4010082c) = 0x23; // IO-2 : scheitter / driving 12mA / input_detect
-	*((volatile uint32_t *)0x40100830) = 0x23; // IO-3 : scheitter / driving 12mA / input_detect
+	*((volatile uint32_t *)0x40100820) = 0x23; // clk  : schmitt / driving 12mA / input_detect
+	*((volatile uint32_t *)0x40100824) = 0x23; // IO-0 : schmitt / driving 12mA / input_detect
+	*((volatile uint32_t *)0x40100828) = 0x23; // IO-1 : schmitt / driving 12mA / input_detect
+	*((volatile uint32_t *)0x4010082c) = 0x23; // IO-2 : schmitt / driving 12mA / input_detect
+	*((volatile uint32_t *)0x40100830) = 0x23; // IO-3 : schmitt / driving 12mA / input_detect
+	/* set espi reset gpio in schmmiter & input mode in 1.8v */
+	*((volatile uint32_t *)0x40230008) = 0xC106; // RST : schmitt
 
 	/* Setup eSPI bus reset */
 	espi_bus_reset_setup(dev);
