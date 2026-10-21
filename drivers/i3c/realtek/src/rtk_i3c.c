@@ -1699,6 +1699,21 @@ static __always_inline void rtk_i3c_done_isr(rtk_i3c_ctx *ctx)
 		args.count = ctx->rx_buffer.msg.count;
 		args.len = ctx->rx_buffer.msg.len;
 		ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
+	} else if (ctx->state == STATE_TAGT_PRV_WRITE && ctx->rx_buffer.msg.count != 0U) {
+		/* A private write received while a read response is still preloaded.
+		 * Report it, but leave the preload and the state alone: the controller
+		 * has not read the response yet. Keep RX armed in place (only rewind
+		 * the count) -- re-arming from the glue layer would be refused with
+		 * BUSY in PRV_WRITE, and a following write would then be dropped.
+		 */
+		args.event = RTK_I3C_EVENT_READ_COMPLETE;
+		args.count = ctx->rx_buffer.msg.count;
+		args.len = ctx->rx_buffer.msg.len;
+		ctx->rx_buffer.msg.count = 0U;
+		if (ctx->cfg->common_cfg.callback != NULL) {
+			ctx->cfg->common_cfg.callback(&args);
+		}
+		return;
 #endif /* CONFIG_RTK_I3C_TAGT */
 	} else if (I3C_STATE_IS_WRITE(ctx->state) && !I3C_MSG_IS_DMA(ctx->tx_buffer.msg.flags) &&
 		   ctx->tx_buffer.msg.count == ctx->tx_buffer.msg.len) {
@@ -1764,8 +1779,16 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 	}
 
 #ifdef CONFIG_RTK_I3C_TAGT
+	/* Bytes in the RX FIFO here are a controller private write. A target accepts
+	 * them in either state (target states are named from the target's side):
+	 *   - STATE_TAGT_PRV_READ:  RX armed, the normal case.
+	 *   - STATE_TAGT_PRV_WRITE: a response is preloaded for a controller private
+	 *     read that has not happened yet. The controller may run other traffic
+	 *     first, e.g. another private write, before it reads; RX and TX use
+	 *     separate FIFOs, so receiving does not disturb the preload.
+	 */
 	if (I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state != STATE_TAGT_PRV_READ &&
-	    ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
+	    ctx->state != STATE_TAGT_PRV_WRITE && ctx->ccc_id != I3C_CCC_BRCT_ENTDAA) {
 		LOG_WRN("Target RXNE ignored: state=%d rxfl=%u\n", ctx->state, read_len);
 		rtk_i3c_core_flush_rx(ctx->core);
 		return;
@@ -1811,7 +1834,8 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 
 	args.len = ctx->rx_buffer.msg.len;
 	if (ctx->rx_buffer.msg.len != 0 && ctx->rx_buffer.msg.count != 0 &&
-	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state == STATE_TAGT_PRV_READ)) {
+	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) &&
+	      (ctx->state == STATE_TAGT_PRV_READ || ctx->state == STATE_TAGT_PRV_WRITE))) {
 		/* Controller read transfers complete when the requested data is
 		 * received. Target private writes complete on STOP/DONE because the
 		 * controller may write fewer bytes than the prepared RX buffer length.
@@ -1825,7 +1849,8 @@ static __always_inline void rtk_i3c_rxne_isr(rtk_i3c_ctx *ctx)
 
 exit:
 	if (ctx->rx_buffer.msg.count == ctx->rx_buffer.msg.len &&
-	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) && ctx->state == STATE_TAGT_PRV_READ)) {
+	    !(I3C_ROLE_IS_TAGT(ctx->cfg->common_cfg.role) &&
+	      (ctx->state == STATE_TAGT_PRV_READ || ctx->state == STATE_TAGT_PRV_WRITE))) {
 		ctx->state = (!I3C_ROLE_IS_CTRL(ctx->cfg->common_cfg.role)) ? STATE_TAGT_IDLE
 									    : STATE_CTRL_IDLE;
 		ctx->rx_buffer = (rtk_i3c_rx_buffer){0};
