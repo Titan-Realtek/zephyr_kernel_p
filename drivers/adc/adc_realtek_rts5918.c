@@ -174,7 +174,7 @@ static int adc_rts5918_read(const struct device *dev, const struct adc_sequence 
 {
 	struct adc_rts5918_data *const data = dev->data;
 	const struct adc_rts5918_config *const cfg = dev->config;
-	volatile struct adc_regs *regs = cfg->regs;	
+	volatile struct adc_regs *regs = cfg->regs;
 	int error;
 
 	adc_context_lock(&data->ctx, false, NULL);
@@ -187,7 +187,7 @@ static int adc_rts5918_read(const struct device *dev, const struct adc_sequence 
 		/* Regular channels trigger disable */
     	regs->REGULAR_b.cfg_sar_rexttrig = 0;
 		/* Reset ADC controller */
-    	regs->REGULAR_b.cfg_sar_rswstart = 0;		
+    	regs->REGULAR_b.cfg_sar_rswstart = 0;
 	}
 	adc_context_release(&data->ctx, error);
 
@@ -290,6 +290,10 @@ static int adc_rts5918_init(const struct device *dev)
 	regs->RSQ0 = 0x0A418820;
     regs->RSQ1 = 0x16A4A0E6;
     regs->RSQ2 = 0x0007B9AC;
+
+	/* set default sample cycle */
+	regs->SAMPLE0 = 0xffffffff;
+	regs->SAMPLE1 = 0xffffffff;
 
 	/* set Force end of conversion interrupt enable */
 	regs->INTEN_b.cfg_sar_eoc = true;
