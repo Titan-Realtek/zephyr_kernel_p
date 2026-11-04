@@ -124,6 +124,13 @@ static void kbc_ibf_isr(const struct device *dev)
 	volatile struct kbc_reg *const kbc_reg = espi_config->kbc_reg;
 	struct espi_evt_data_kbc *kbc_evt = (struct espi_evt_data_kbc *)&evt.evt_data;
 
+	/**
+	 * In case that interrupt is triggered but IBF is deasserted
+	 */
+	if(!(kbc_reg->STS & KBC_STS_IBF)) {
+		return;
+	}
+
 	/*
 	 * Indicates if the host sent a command or data.
 	 * 0 = data
