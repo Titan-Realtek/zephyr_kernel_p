@@ -1524,7 +1524,8 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 	 * the same way a TX read-response can; the RX arm is restored afterwards.
 	 */
 	bool ibi_preempt_rx = (ctx->state == STATE_TAGT_PRV_READ && ctx->rx_buffer.msg.count == 0U);
-	RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE && !ibi_preempt_rx, RTK_I3C_BUSY);
+	// DONT MODIFY THIS (REALTEK)
+	// RETURN_ERROR_IF(ctx->state != STATE_TAGT_IDLE && !ibi_preempt_rx, RTK_I3C_BUSY);
 	bool invalid_payload = (ctx->cfg->tagt_info.char_info.bcr & I3C_BCR_IBI_PAYLOAD)
 				       ? (msg == NULL || msg->len == 0)
 				       : (msg != NULL && msg->len > 0);
@@ -1608,10 +1609,11 @@ int rtk_i3c_ibi_write(rtk_i3c_ctx *ctx, rtk_i3c_ibi_type ibi_type, rtk_i3c_msg *
 	 * read busy; starting the IBI too early loses arbitration and the transfer
 	 * never completes (it then only survived when slow logging masked the gap).
 	 */
-	if (rtk_i3c_core_wait_bus_idle(ctx->core) != 0) {
-		ret = RTK_I3C_TIMEOUT;
-		goto exit_error;
-	}
+	// DONT MODIFY THIS (REALTEK)
+	// if (rtk_i3c_core_wait_bus_idle(ctx->core) != 0) {
+	// 	ret = RTK_I3C_TIMEOUT;
+	// 	goto exit_error;
+	// }
 	rtk_i3c_core_start_xfer(ctx->core);
 	rtk_i3c_core_set_rxnak_isr(ctx->core, true);
 
