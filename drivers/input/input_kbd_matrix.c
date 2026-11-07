@@ -104,6 +104,18 @@ static bool input_kbd_matrix_scan(const struct device *dev)
 			row &= cfg->actual_key_mask[col];
 		}
 
+		/* for LIP function */
+		for (int r = 0; r < cfg->row_size; r++) {
+			kbd_row_t mask = BIT(r);
+			kbd_row_t row_bit = row & mask;
+			if(row_bit){
+				input_report_abs(dev, INPUT_ABS_X, col, false, K_FOREVER);
+				input_report_abs(dev, INPUT_ABS_Y, r, false, K_FOREVER);
+				input_report_key(dev, INPUT_BTN_TASK, row_bit, true, K_FOREVER);
+			}
+		}
+		/* LIP end */
+
 		cfg->matrix_new_state[col] = row;
 		key_event |= row;
 	}
