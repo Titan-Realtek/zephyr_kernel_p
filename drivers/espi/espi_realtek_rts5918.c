@@ -651,6 +651,40 @@ struct rts5918_pvt_io_evt {
 	uint32_t reserved : 16;
 };
 
+/*
+ * The PROMT STS registers are 32-bit.  Bits 0..7 are status flags, but bits 8,
+ * 9 and 11 are write-1-to-clear commands (ACPI_STS_CLR_OBF_FULL /
+ * ACPI_STS_CLR_IBF_FULL / ACPI_STS_CLR_OBF_FULL_STS).
+ *
+ * A plain `STS |= bit' / `STS &= ~bit' emits a 32-bit read-modify-write, so any
+ * stale 1 read back from those command bits is written straight back, re-firing
+ * the 1WC and clearing OBF/IBF a second time.  Mask the status down to bit0..7
+ * before programming the full word.
+ */
+#define PROMT_STS_STATUS_MASK   0x000000FFu
+#define PROMT_STS_CMD_MASK      (ACPI_STS_CLR_OBF_FULL | \
+				 ACPI_STS_CLR_IBF_FULL | \
+				 ACPI_STS_CLR_OBF_FULL_STS)
+
+static inline void promt_sts_write(volatile struct acpi_reg *reg, uint8_t status)
+{
+	reg->STS = (uint32_t)status & PROMT_STS_STATUS_MASK;
+}
+
+static inline void promt_sts_set(volatile struct acpi_reg *reg, uint8_t flags)
+{
+	uint8_t v = (uint8_t)(reg->STS & PROMT_STS_STATUS_MASK);
+
+	promt_sts_write(reg, (uint8_t)(v | flags));
+}
+
+static inline void promt_sts_clear(volatile struct acpi_reg *reg, uint8_t flags)
+{
+	uint8_t v = (uint8_t)(reg->STS & PROMT_STS_STATUS_MASK);
+
+	promt_sts_write(reg, (uint8_t)(v & (uint8_t)~flags));
+}
+
 static void promt0_ibf_isr(const struct device *dev)
 {
 	const struct espi_rts5918_config *const espi_config = dev->config;
@@ -696,10 +730,24 @@ static void promt0_obe_isr(const struct device *dev)
 	struct rts5918_pvt_io_evt *pvt =
 		(struct rts5918_pvt_io_evt *)&evt.evt_data;
 
-	if (promt0_reg->STS & ACPI_STS_OBF) {
-		promt0_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+	/*
+	 * Single read, single write.  The original code did two consecutive
+	 * read-modify-writes, so the second one read back the CLR_OBF_FULL bit
+	 * written by the first and fired that 1WC twice.  It also echoed any
+	 * stale bit9 (CLR_IBF_FULL) read from the register, which cleared IBF a
+	 * second time.  Read once, strip every command bit from the read-back
+	 * value, then set only the command bits we actually want.
+	 */
+	{
+		uint32_t sts_now = promt0_reg->STS;
+		uint32_t sts_new = sts_now & ~PROMT_STS_CMD_MASK;
+
+		if (sts_now & ACPI_STS_OBF) {
+			sts_new |= ACPI_STS_CLR_OBF_FULL;
+		}
+		sts_new |= ACPI_STS_CLR_OBF_FULL_STS;
+		promt0_reg->STS = sts_new;
 	}
-	promt0_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 
 	pvt->type = ESPIHUB_PVT_IO_BATT_OBE;
 	pvt->data = 0;
@@ -733,7 +781,8 @@ static int espi_promt0_setup(const struct device *dev)
 		(void)promt0_reg->IB;  /* discard pending byte */
 	}
 	if (promt0_reg->STS & ACPI_STS_IBF) {
-		promt0_reg->STS |= ACPI_STS_CLR_IBF_FULL;
+		/* Write the 1WC command bit without echoing the read-back value. */
+		promt0_reg->STS = ACPI_STS_CLR_IBF_FULL;
 	}
 
 	promt0_reg->PTADDR =
@@ -1419,7 +1468,7 @@ NVIC_EnableIRQ((DT_IRQ_BY_NAME(DT_DRV_INST(0), promt1_ibf, irq)));
 		}
 		break;
 	case ECUSTOM_HOST_CMD_SEND_RESULT:
-		promt0_reg->STS &= ~ACPI_STS_STS0;
+		promt_sts_clear(promt0_reg, ACPI_STS_STS0);
 		promt0_reg->OB = *data & 0xff;
 		break;
 case ECUSTOM_HOST_CMD_SEND_WRITE:
