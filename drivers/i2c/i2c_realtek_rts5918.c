@@ -320,6 +320,10 @@ static int i2c_rts5918_recover_bus(const struct device *dev)
 }
 #endif /* 0 — Phase 10.10 stubbed out */
 
+void i2c_rts5918_reset(const struct device *dev)
+{
+	i2c_rts5918_reset_i2c(dev);
+}
 /*
  * Phase 10.10: minimal SCCON clock-enable shim.
  *
@@ -395,6 +399,10 @@ static int i2c_rts5918_initialize(const struct device *dev)
 	return 0;
 }
 
+static const struct i2c_driver_api funcs = {
+	.recover_bus = i2c_rts5918_reset,
+};
+
 #define DEV_CONFIG_CLK_DEV_INIT(n)                                                                 \
 	.clk_dev = DEVICE_DT_GET(DT_INST_CLOCKS_CTLR(n)),                                          \
 	.sccon_cfg = {                                                                             \
@@ -412,6 +420,6 @@ static int i2c_rts5918_initialize(const struct device *dev)
 		.scl_gpio = DT_INST_PROP(n, scl_gpio_pin)};                                        \
 	I2C_DEVICE_DT_INST_DEFINE(n, i2c_rts5918_initialize, NULL, NULL,                           \
 				  &i2c_rts5918_##n##_config, POST_KERNEL,                          \
-				  CONFIG_I2C_RTS5918_INIT_PRIORITY, NULL);
+				  CONFIG_I2C_RTS5918_INIT_PRIORITY, &funcs);
 
 DT_INST_FOREACH_STATUS_OKAY(I2C_DEVICE_INIT_RTS5918)
