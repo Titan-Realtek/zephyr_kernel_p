@@ -28,6 +28,14 @@ LOG_MODULE_REGISTER(espi, CONFIG_ESPI_LOG_LEVEL);
 #include "reg/reg_port80.h"
 #include "reg/reg_mbox.h"
 
+
+volatile uint32_t jia_acpi_cnt;
+volatile uint32_t jia_kbc_cnt;
+volatile uint32_t jia_promt0_cnt;
+volatile uint32_t jia_promt1_cnt;
+volatile uint32_t jia_promt2_cnt;
+volatile uint32_t jia_promt3_cnt;
+
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1, "support only one espi compatible node");
 
 struct espi_rts5918_config {
@@ -167,8 +175,9 @@ static void kbc_obe_isr(const struct device *dev)
 	}
 
 	if (kbc_reg->STS & KBC_STS_OBF) {
-		kbc_reg->STS |= KBC_STS_CLR_OBF_FULL;
-		kbc_reg->STS |= KBC_STS_CLR_OBF_FULL_STS;
+		// kbc_reg->STS |= KBC_STS_CLR_OBF_FULL;
+		// kbc_reg->STS |= KBC_STS_CLR_OBF_FULL_STS;
+		jia_kbc_cnt++;
 	}
 	kbc_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 	/* Notify application that host already read out data. */
@@ -460,7 +469,8 @@ static void acpi_obe_isr(const struct device *dev)
 	volatile struct acpi_reg *const acpi_reg = espi_config->acpi_reg;
 
 	if (acpi_reg->STS & ACPI_STS_OBF) {
-		acpi_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		// acpi_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		jia_acpi_cnt++;
 	}
 
 	acpi_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
@@ -743,7 +753,8 @@ static void promt0_obe_isr(const struct device *dev)
 		uint32_t sts_new = sts_now & ~PROMT_STS_CMD_MASK;
 
 		if (sts_now & ACPI_STS_OBF) {
-			sts_new |= ACPI_STS_CLR_OBF_FULL;
+			// sts_new |= ACPI_STS_CLR_OBF_FULL;
+			jia_promt0_cnt++;	
 		}
 		sts_new |= ACPI_STS_CLR_OBF_FULL_STS;
 		promt0_reg->STS = sts_new;
@@ -850,7 +861,8 @@ static void promt1_obe_isr(const struct device *dev)
 	struct espi_evt_data_acpi *promt1_evt = (struct espi_evt_data_acpi *)&evt.evt_data;
 
 	if (promt1_reg->STS & ACPI_STS_OBF) {
-		promt1_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		// promt1_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		jia_promt1_cnt++;	
 	}
 	promt1_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 	/* Notify application that host already read out data. */
@@ -963,7 +975,8 @@ static void promt2_obe_isr(const struct device *dev)
 		(struct rts5918_pvt_io_evt *)&evt.evt_data;
 
 	if (promt2_reg->STS & ACPI_STS_OBF) {
-		promt2_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		// promt2_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		jia_promt2_cnt++;	
 	}
 	promt2_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 
@@ -1076,7 +1089,8 @@ static void promt3_obe_isr(const struct device *dev)
 		(struct rts5918_pvt_io_evt *)&evt.evt_data;
 
 	if (promt3_reg->STS & ACPI_STS_OBF) {
-		promt3_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		// promt3_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		jia_promt3_cnt++;	
 	}
 	promt3_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 
