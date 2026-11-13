@@ -23,6 +23,21 @@ void input_kbd_matrix_poll_start(const struct device *dev)
 	k_sem_give(&data->poll_lock);
 }
 
+int input_kbd_matrix_set_raw_key_cb(const struct device *dev,
+				    input_kbd_matrix_raw_key_cb_t cb)
+{
+	struct input_kbd_matrix_common_data *data;
+
+	if (dev == NULL) {
+		return -EINVAL;
+	}
+
+	data = dev->data;
+	data->raw_key_cb = cb;
+
+	return 0;
+}
+
 static bool input_kbd_matrix_ghosting(const struct device *dev)
 {
 	const struct input_kbd_matrix_common_config *cfg = dev->config;
@@ -83,6 +98,7 @@ static void input_kbd_matrix_drive_column(const struct device *dev, int col)
 static bool input_kbd_matrix_scan(const struct device *dev)
 {
 	const struct input_kbd_matrix_common_config *cfg = dev->config;
+	const struct input_kbd_matrix_common_data *data = dev->data;
 	const struct input_kbd_matrix_api *api = cfg->api;
 	kbd_row_t row;
 	kbd_row_t key_event = 0U;
@@ -102,6 +118,21 @@ static bool input_kbd_matrix_scan(const struct device *dev)
 
 		if (cfg->actual_key_mask != NULL) {
 			row &= cfg->actual_key_mask[col];
+		}
+
+		/*
+		 * Report every key read as pressed, before debouncing. The
+		 * callback is invoked once per scan cycle for as long as the key
+		 * stays pressed, no release event is generated.
+		 */
+		if (data->raw_key_cb != NULL) {
+			for (int r = 0; r < cfg->row_size; r++) {
+				kbd_row_t row_bit = row & BIT(r);
+
+				if (row_bit) {
+					data->raw_key_cb(dev, r, col, row_bit);
+				}
+			}
 		}
 
 		cfg->matrix_new_state[col] = row;

@@ -68,6 +68,23 @@ int input_kbd_matrix_actual_key_mask_set(const struct device *dev,
 #define INPUT_KBD_MATRIX_ROW_BITS NUM_BITS(kbd_row_t)
 
 /**
+ * @brief Keyboard matrix raw key callback.
+ *
+ * Called from the matrix scanning thread for every key read as pressed while a
+ * column is being driven. Unlike the input subsystem events, this bypasses the
+ * input queue and is **not** debounced, so it is invoked once per scan cycle
+ * for as long as the key stays pressed. There is no release notification, the
+ * caller has to track the key state itself.
+ *
+ * @param dev Keyboard matrix device instance.
+ * @param row The matrix row of the detected key.
+ * @param col The matrix column of the detected key.
+ * @param value The row bit mask reported for this key, always non-zero.
+ */
+typedef void (*input_kbd_matrix_raw_key_cb_t)(const struct device *dev,
+					      int row, int col, int value);
+
+/**
  * @brief Keyboard matrix internal APIs.
  */
 struct input_kbd_matrix_api {
@@ -247,6 +264,9 @@ struct input_kbd_matrix_common_data {
 	uint32_t scan_clk_cycle[INPUT_KBD_MATRIX_SCAN_OCURRENCES];
 	uint8_t scan_cycles_idx;
 
+	/* Raw key callback, see input_kbd_matrix_set_raw_key_cb(). */
+	input_kbd_matrix_raw_key_cb_t raw_key_cb;
+
 	struct k_sem poll_lock;
 
 	struct k_thread thread;
@@ -276,6 +296,22 @@ struct input_kbd_matrix_common_data {
  * @param dev Keyboard matrix device instance.
  */
 void input_kbd_matrix_poll_start(const struct device *dev);
+
+/**
+ * @brief Register a raw key callback.
+ *
+ * The callback is invoked from the scanning thread every time a key is read as
+ * pressed, before any debouncing or ghosting filtering. Only one callback can
+ * be registered, a previously registered one is replaced.
+ *
+ * @param dev Keyboard matrix device instance.
+ * @param cb The callback to register, or NULL to unregister.
+ *
+ * @retval 0 If the callback was registered successfully.
+ * @retval -EINVAL If @p dev is NULL.
+ */
+int input_kbd_matrix_set_raw_key_cb(const struct device *dev,
+				    input_kbd_matrix_raw_key_cb_t cb);
 
 #if defined(CONFIG_INPUT_KBD_DRIVE_COLUMN_HOOK) || defined(__DOXYGEN__)
 /**
