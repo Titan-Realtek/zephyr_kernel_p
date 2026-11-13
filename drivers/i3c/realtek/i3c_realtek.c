@@ -646,6 +646,19 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		if (data->target_config != NULL) {
 			i3c_realtek_arm_rx(data);
 		}
+
+		extern uint8_t* _i3c_buf;
+		extern uint8_t _i3c_len;
+
+		rtk_i3c_msg msg = {
+			.data = _i3c_buf,
+			.len = _i3c_len,
+			.count = 0U,
+			.flags = RTK_I3C_WRITE,
+		};
+
+		rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg);
+
 		k_sem_give(&data->ibi_sem);
 		break;
 	case RTK_I3C_EVENT_IBI_READ_COMPLETE:
