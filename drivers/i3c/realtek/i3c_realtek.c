@@ -647,6 +647,7 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 			i3c_realtek_arm_rx(data);
 		}
 
+#ifdef CONFIG_BOARD_RTS5918_OSPREY
 		extern uint8_t* _i3c_buf;
 		extern uint8_t _i3c_len;
 
@@ -658,6 +659,7 @@ static void i3c_realtek_hal_callback(rtk_i3c_callback_args *const args)
 		};
 
 		rtk_i3c_tagt_xfer(&data->rtk_ctx, &msg);
+#endif
 
 		k_sem_give(&data->ibi_sem);
 		break;
