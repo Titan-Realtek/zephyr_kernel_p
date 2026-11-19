@@ -741,14 +741,21 @@ static void promt0_obe_isr(const struct device *dev)
 	 * value, then set only the command bits we actually want.
 	 */
 	{
+#if 0
 		uint32_t sts_now = promt0_reg->STS;
 		uint32_t sts_new = sts_now & ~PROMT_STS_CMD_MASK;
 
 		if (sts_now & ACPI_STS_OBF) {
+			LOG_ERR("promt0_obe_isr: OBF still set on OBE interrupt");
 			sts_new |= ACPI_STS_CLR_OBF_FULL;
 		}
 		sts_new |= ACPI_STS_CLR_OBF_FULL_STS;
 		promt0_reg->STS = sts_new;
+#endif
+		if (promt0_reg->STS & ACPI_STS_OBF) {
+			promt0_reg->STS |= ACPI_STS_CLR_OBF_FULL;
+		}
+		promt0_reg->STS |= ACPI_STS_CLR_OBF_FULL_STS;
 	}
 
 	pvt->type = ESPIHUB_PVT_IO_BATT_OBE;
