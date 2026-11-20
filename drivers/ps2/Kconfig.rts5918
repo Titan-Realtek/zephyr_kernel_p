@@ -17,9 +17,10 @@ config PS2_REALTEK_RTS5918
 	  the controller IRQ; TX is blocking on a tx_sync_sem until the
 	  Transaction Done Status interrupt fires.
 
-config PS2_REALTEK_FW_INHIBIT
-	bool "Enable PS2 FW inhibit"
-	default y
+# HW Control CLK Low Inhibit PS/2 Jeff 26/11/20 
+#config PS2_REALTEK_FW_INHIBIT
+	#bool "Enable PS2 FW inhibit"
+	#default y
 
 config PS2_REALTEK_CLK_PIN
 	int "Clock Pin number"
