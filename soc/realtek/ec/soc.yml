@@ -4,3 +4,6 @@ family:
   - name: rts5918
     socs:
     - name: rts5918
+  - name: rts5918b
+    socs:
+    - name: rts5918b

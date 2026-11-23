@@ -5,7 +5,7 @@
 
 if SOC_FAMILY_REALTEK_EC
 
-if SOC_SERIES_RTS5918
+if SOC_SERIES_RTS5918 || SOC_SERIES_RTS5918B
     config REALTEK_IS_5918
         bool
         default y
@@ -21,6 +21,7 @@ if REALTEK_RTS5918_IMG_HEADER
 config REALTEK_HEADER_CHIP
 	string
 	default "RTS5918" if SOC_RTS5918
+	default "RTS5918B" if SOC_RTS5918B
 
 config REALTEK_RTS_HEADER_COMBINE
     bool "Combine binary and header into new BIN file"
@@ -32,6 +33,7 @@ config REALTEK_RTS_HEADER_COMBINE
 config REALTEK_RTS_IMG_HEADER_LOAD_ADDRESS
     string "Image header load address"
     default "0x200003E0" if SOC_RTS5918
+    default "0x200003E0" if SOC_RTS5918B
     default "0x20000000"
 	help
 	  The loading address where the RTS5918 ROM code loads firmware image from flash to RAM.

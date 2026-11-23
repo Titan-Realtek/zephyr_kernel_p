@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Realtek Semiconductor Corporation, SIBG-SD7
+#
+# RTS5918B (7148) SoC series. Cloned from rts5918 (7088); 7148-specific
+# differences are kept inside this directory so rts5918 stays untouched.
+#
+
+config SOC_SERIES_RTS5918B
+	bool
+	select SOC_FAMILY_REALTEK_EC
+	help
+	  Enable support for REALTEK EC RTS5918B (7148) MCU series
+
+config SOC_SERIES
+	default "rts5918b" if SOC_SERIES_RTS5918B
+
+config SOC_RTS5918B
+	bool
+	select SOC_SERIES_RTS5918B
+
+config SOC
+	default "rts5918b" if SOC_RTS5918B

@@ -1,0 +1,10 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Realtek Semiconductor Corporation, SIBG-SD7
+ *
+ * RTS5918B (7148) pinctrl. Inherits rts5918-pinctrl.dtsi (7088);
+ * add 7148-specific pin groups below.
+ */
+
+#include <realtek/ec/rts5918-pinctrl.dtsi>

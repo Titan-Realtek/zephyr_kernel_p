@@ -5,7 +5,7 @@
 
 config CLOCK_CONTROL_RTS5918_SCCON
 	bool "Realtek RTS5918 system clock controller driver"
-	depends on SOC_SERIES_RTS5918
+	depends on SOC_SERIES_RTS5918 || SOC_SERIES_RTS5918B
 	default y if DT_HAS_REALTEK_RTS5918_SCCON_ENABLED
 	help
 	  Enable support for RTS5918 system clock controller driver

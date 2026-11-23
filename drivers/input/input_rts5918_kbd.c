@@ -96,7 +96,7 @@ static void rts5918_kbd_isr(const struct device *dev)
 	
 	uint32_t temp = inst->int_en;
 	inst->int_en = 0;
-#ifdef CONFIG_SOC_RTS5918
+#if defined(CONFIG_SOC_RTS5918) || defined(CONFIG_SOC_RTS5918B)
 	inst->scan_ctrl = 0;
 	inst->scan_status = 0x1FFFFF;
 #endif	
@@ -175,7 +175,7 @@ static int rts5918_kbd_init(const struct device *dev)
 
 	/* KSO pins output low */
 	inst->scan_out = 0x00;
-#ifndef CONFIG_SOC_RTS5918
+#if !defined(CONFIG_SOC_RTS5918) && !defined(CONFIG_SOC_RTS5918B)
 	/* Enable KSI 8 if RAW Size more than 8*/
 	if (ksi_mask & BIT(8)) {
 		inst->ctrl |= KBM_CTRL_KSI8EN_Msk;
@@ -196,7 +196,7 @@ static int rts5918_kbd_init(const struct device *dev)
 		inst->ctrl |= KBM_CTRL_KSO19EN_Msk;
 	}
 #endif
-#ifdef CONFIG_SOC_RTS5918
+#if defined(CONFIG_SOC_RTS5918) || defined(CONFIG_SOC_RTS5918B)
 	inst->scan_ctrl = 0;
 #endif
 	/* Enable KSO OpenDrain Output Type */

@@ -351,7 +351,7 @@ static int sys_clock_driver_init(void)
 	};
 
 #ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT
-#if CONFIG_SOC_RTS5918
+#if defined(CONFIG_SOC_RTS5918) || defined(CONFIG_SOC_RTS5918B)
 	/* Enable SLWTMR0 clock power */
 	sys_reg->IPCLK2 |= SYSTEM_IPCLK2__SLWTMR0_Msk;
 #endif
