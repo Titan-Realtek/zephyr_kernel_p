@@ -646,7 +646,9 @@ static uint8_t ec_host_cmd_sram[ESPI_RTK_PERIPHERAL_HOST_CMD_PARAM_SIZE] __align
 #define ESPIHUB_PVT_IO_4CCCMD_CMD_IBF     6   /* host wrote 4cccmd command */
 #define ESPIHUB_PVT_IO_4CCCMD_DATA_IBF    7   /* host wrote 4cccmd data    */
 #define ESPIHUB_PVT_IO_4CCCMD_OBE         8   /* host read 4cccmd output   */
-
+#define ESPIHUB_PVT_IO_MBI_INDEX		  9
+#define ESPIHUB_PVT_IO_MBI_WRITE		  10
+#define ESPIHUB_PVT_IO_MBI_READ		      11
 struct rts5918_pvt_io_evt {
 	uint32_t type     : 8;
 	uint32_t data     : 8;
@@ -1157,47 +1159,6 @@ static int espi_promt3_setup(const struct device *dev)
 
 #ifdef CONFIG_ESPI_PERIPHERAL_CHANNEL
 
-uint8_t g_mailbox_index = 0xFF;
-uint32_t g_mailbox_buffer[256];
-
-#define BASE_ADDR_MBI ((uint32_t)(g_mailbox_buffer))
-
-#define MBX_HOST_TO_EC_MAILBOX_REGISTER (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x00)))
-#define MBX_EC_TO_HOST_MAILBOX_REGISTER (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x04)))
-
-#define MBX_MAILBOX_REGISTER_0  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x10))) //MBI_GPD0
-#define MBX_MAILBOX_REGISTER_1  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x14))) //MBI_GPD1
-#define MBX_MAILBOX_REGISTER_2  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x18))) //MBI_GPD2
-#define MBX_MAILBOX_REGISTER_3  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x1C))) //MBI_GPD3
-#define MBX_MAILBOX_REGISTER_4  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x20))) //MBI_GPD4
-#define MBX_MAILBOX_REGISTER_5  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x24))) //MBI_GPD5
-#define MBX_MAILBOX_REGISTER_6  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x28))) //MBI_GPD6
-#define MBX_MAILBOX_REGISTER_7  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x2C))) //MBI_GPD7
-#define MBX_MAILBOX_REGISTER_8  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x30))) //MBI_GPD8
-#define MBX_MAILBOX_REGISTER_9  (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x34))) //MBI_GPD9
-#define MBX_MAILBOX_REGISTER_10 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x38))) //MBI_GPD10
-#define MBX_MAILBOX_REGISTER_11 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x3C))) //MBI_GPD11
-#define MBX_MAILBOX_REGISTER_12 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x40))) //MBI_GPD12
-#define MBX_MAILBOX_REGISTER_13 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x44))) //MBI_GPD13
-#define MBX_MAILBOX_REGISTER_14 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x48))) //MBI_GPD14
-#define MBX_MAILBOX_REGISTER_15 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x4C))) //MBI_GPD15
-#define MBX_MAILBOX_REGISTER_16 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x50))) //MBI_GPD16
-#define MBX_MAILBOX_REGISTER_17 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x54))) //MBI_GPD17
-#define MBX_MAILBOX_REGISTER_18 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x58))) //MBI_GPD18
-#define MBX_MAILBOX_REGISTER_19 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x5C))) //MBI_GPD19
-#define MBX_MAILBOX_REGISTER_20 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x60))) //MBI_GPD20
-#define MBX_MAILBOX_REGISTER_21 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x64))) //MBI_GPD21
-#define MBX_MAILBOX_REGISTER_22 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x68))) //MBI_GPD22
-#define MBX_MAILBOX_REGISTER_23 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x6C))) //MBI_GPD23
-#define MBX_MAILBOX_REGISTER_24 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x70))) //MBI_GPD24
-#define MBX_MAILBOX_REGISTER_25 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x74))) //MBI_GPD25
-#define MBX_MAILBOX_REGISTER_26 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x78))) //MBI_GPD26
-#define MBX_MAILBOX_REGISTER_27 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x7C))) //MBI_GPD27
-#define MBX_MAILBOX_REGISTER_28 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x80))) //MBI_GPD28
-#define MBX_MAILBOX_REGISTER_29 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x84))) //MBI_GPD29
-#define MBX_MAILBOX_REGISTER_30 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x88))) //MBI_GPD30
-#define MBX_MAILBOX_REGISTER_31 (*((volatile unsigned char *)(BASE_ADDR_MBI + 0x8C))) //MBI_GPD31
-
 struct data_item1_t {
 	const struct device *dev;
 };
@@ -1234,93 +1195,40 @@ static void espi_periph_ch_isr(const struct device *dev)
 		evt.evt_data = ESPI_PERIPHERAL_NODATA;
 
 		struct espi_evt_data_acpi *ioshort_evt = (struct espi_evt_data_acpi *)&evt.evt_data;
-		/*
-		* Indicates if the host sent a command or data.
-		* 0 = data
-		* 1 = Command.
-		*/
 		const uint16_t io_address = espi_reg->IOSHORTRDADDR & ESPI_IOSHORTRDADDR_ADDR;
-		ioshort_evt->type = io_address == 0x1604? 1 : 0;
-
-		// Handle Bios debug port ch1 (86h)
-		if(io_address == 0x86)
-		{
-			evt.evt_details = ESPI_PERIPHERAL_DEBUG_PORT80;
-			evt.evt_details |= (ESPI_PERIPHERAL_INDEX_1 << 16);
-		}
-		// Handle mailbox index (1610h)
-		else if(io_address == 0x1610) {
-			evt.evt_details |= (ESPI_PERIPHERAL_INDEX_5 << 16);
-		}
-		// Handle mailbox data (1611h)
-		else if(io_address == 0x1611) {
-			evt.evt_details |= (ESPI_PERIPHERAL_INDEX_6 << 16);
-		}
 
 		/* The data in IOSHORT Input Buffer */
 		ioshort_evt->data = (espi_reg->IOSHORTRDDATA & 0xff);
 
     	// LOG_ERR("addr 0x%X value 0x%X", io_address, ioshort_evt->data);
 		if(io_address == 0x86) {
+			// Handle Bios debug port ch1 (86h)
 			if(espi_reg->IOSHORTSTS & ESPI_IOSHORTSTS_TYPE) {
+				evt.evt_details = ESPI_PERIPHERAL_DEBUG_PORT80;
+				evt.evt_details |= (ESPI_PERIPHERAL_INDEX_1 << 16);
 				espi_send_callbacks(&data->callbacks, dev, evt);
 			}
 		}
 		else if (io_address == 0x1610 /* index */) {
 			if(espi_reg->IOSHORTSTS & ESPI_IOSHORTSTS_TYPE) {
-				/* Host Write */
-				g_mailbox_index = ioshort_evt->data;
-				// LOG_ERR("g_mailbox_index %x",g_mailbox_index);
+				/* Host Write Index */
+				evt.evt_details = ESPI_PERIPHERAL_HOST_IO_PVT;
+				ioshort_evt->type = ESPIHUB_PVT_IO_MBI_INDEX;
+				espi_send_callbacks(&data->callbacks, dev, evt);
 			}
-			// There is no case of "Host Read"
 		}
 		else if (io_address == 0x1611 /* data */) {
 			if(espi_reg->IOSHORTSTS & ESPI_IOSHORTSTS_TYPE) {
 				/* Host Write */
-				// LOG_ERR("g_mailbox_index %x data %x",g_mailbox_index, ioshort_evt->data);
-				// g_mailbox_buffer[g_mailbox_index] = ioshort_evt->data & 0xFF;
-				switch(g_mailbox_index)
-				{
-					case 0x0:
-						MBX_HOST_TO_EC_MAILBOX_REGISTER = ioshort_evt->data;
-						break;
-					case 0x1:
-						if(ioshort_evt->data == 0xFF)
-							MBX_EC_TO_HOST_MAILBOX_REGISTER = 0;
-						break;
-					default:
-						if(g_mailbox_index >= 0x10) {
-							g_mailbox_buffer[4 + (g_mailbox_index - 0x10)] = ioshort_evt->data;
-						}
-						break;
-				}
-				// MBX_MAILBOX_REGISTER_0 = ioshort_evt->data;
-				if(MBX_HOST_TO_EC_MAILBOX_REGISTER != 0)
-				{
-					extern void IntMbx(void);
-					IntMbx();
-				}
+				ioshort_evt->type = ESPIHUB_PVT_IO_MBI_WRITE;
 			} else {
 				/* Host Read */
-				uint32_t value = 0;
-				switch(g_mailbox_index)
-				{
-					case 0x0:
-						value = MBX_HOST_TO_EC_MAILBOX_REGISTER;
-						break;
-					case 0x1:
-						value = MBX_EC_TO_HOST_MAILBOX_REGISTER;
-						break;
-					default:
-						if(g_mailbox_index >= 0x10) {
-							value = g_mailbox_buffer[4 + (g_mailbox_index - 0x10)];
-						}
-						break;
-				}
-				// LOG_ERR("g_mailbox_index %x %x",g_mailbox_index, value);
-				espi_reg->IOSHORTRDDATA = value << 8;
+				ioshort_evt->type = ESPIHUB_PVT_IO_MBI_READ;
 			}
+			evt.evt_details = ESPI_PERIPHERAL_HOST_IO_PVT;
+			espi_send_callbacks(&data->callbacks, dev, evt);
 		}
+
 		if (io_address == 0x1610 || io_address == 0x1611) {
 			if ((*((uint32_t * volatile)0x40100834) & BIT(4)) && (espi_reg->EFSTS & BIT(3))) {
 				int key = irq_lock();
