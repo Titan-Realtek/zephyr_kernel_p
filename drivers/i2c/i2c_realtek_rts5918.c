@@ -122,12 +122,12 @@ static int i2c_rts5918_reset_i2c(const struct device *dev)
 			return -EINVAL;
 	}
 
-	/* system reset I2C module */
-	APB_I2C_RESET |= (1 << (20-channel));
-	APB_I2C_RESET &= ~(1 << (20-channel));
-	/* I2C IP reset */
-	IP_I2C_RESET |= (1 << (21-channel));
+	/* reset I2C */
 	IP_I2C_RESET &= ~(1 << (21-channel));
+	APB_I2C_RESET &= ~(1 << (20-channel));
+	/* set I2C in idle  */
+	APB_I2C_RESET |= (1 << (20-channel));
+	IP_I2C_RESET |= (1 << (21-channel));
 
 	/* reinitialize I2C module */
 	return i2c_rts5918_initialize(dev);
